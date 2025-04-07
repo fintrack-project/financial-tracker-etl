@@ -30,3 +30,22 @@ def log_message(message):
         format="%(asctime)s - %(levelname)s - %(message)s"
     )
     logging.info(message)
+
+import os
+
+def load_env_variables(env_file=".env"):
+    """
+    Load environment variables from a .env file.
+    """
+    env_vars = {}
+    if os.path.exists(env_file):
+        with open(env_file) as f:
+            for line in f:
+                # Ignore comments and empty lines
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    key, value = line.split("=", 1)
+                    env_vars[key.strip()] = value.strip()
+    else:
+        raise FileNotFoundError(f"{env_file} file not found.")
+    return env_vars

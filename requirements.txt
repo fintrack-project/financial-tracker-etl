@@ -5,3 +5,4 @@ numpy
 beautifulsoup4
 lxml
 python-dotenv
+psycopg2

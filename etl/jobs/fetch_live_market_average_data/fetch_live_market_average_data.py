@@ -1,24 +1,35 @@
 import requests
-import json
+import os
 from datetime import datetime
-from etl.utils import get_db_connection, log_message
+from dotenv import load_dotenv
+from etl.utils import get_db_connection, log_message, load_env_variables
+
+# Load environment variables from .env file
+env_vars = load_env_variables()
 
 # Constants
-SPY_SYMBOL = "SPY"
-QQQ_SYMBOL = "QQQ"
-US_MARKET_CLOSE_TIME = "16:00"  # 4:00 PM ET
+SP500_SYMBOL = "^GSPC"
+NASDAQ100_SYMBOL = "^NDX"
+US_MARKET_CLOSE_TIME = "16:00"  # 4:00 PM ET^
 
-def fetch_market_data(api_url, api_key, symbols):
+def fetch_market_data(symbols):
     """
     Fetch market data for the given symbols from Yahoo Finance via RapidAPI.
     """
+    api_url = env_vars.get("RAPIDAPI_URL")
+    api_key = env_vars.get("RAPIDAPI_KEY")
+
+    if not api_url or not api_key:
+        raise ValueError("API_URL or API_KEY is not set. Check your .env file.")
+
     headers = {
         "X-RapidAPI-Key": api_key,
-        "X-RapidAPI-Host": "yahoo-finance15.p.rapidapi.com"
+        "X-RapidAPI-Host": "apidojo-yahoo-finance-v1.p.rapidapi.com"
     }
-    params = {"symbol": ",".join(symbols)}
+    params = {"symbols": ",".join(symbols)}
     response = requests.get(api_url, headers=headers, params=params)
     response.raise_for_status()
+
     return response.json()
 
 def process_market_data(data):
@@ -26,7 +37,9 @@ def process_market_data(data):
     Extract price and percent dropped for each symbol.
     """
     processed_data = []
-    for symbol_data in data:
+    # Navigate to the "result" array in the response
+    results = data.get("quoteResponse", {}).get("result", [])
+    for symbol_data in results:
         symbol = symbol_data.get("symbol")
         price = symbol_data.get("regularMarketPrice")
         percent_change = symbol_data.get("regularMarketChangePercent")
@@ -37,11 +50,11 @@ def process_market_data(data):
         })
     return processed_data
 
-def save_market_data_to_db(data, db_config):
+def save_market_data_to_db(data):
     """
     Save the processed market data into the database.
     """
-    connection = get_db_connection(db_config)
+    connection = get_db_connection()
     cursor = connection.cursor()
     for record in data:
         cursor.execute("""
@@ -53,23 +66,18 @@ def save_market_data_to_db(data, db_config):
     connection.close()
 
 def run():
+    print("Running fetch_live_market_average_data job...")
     """
     Main function to fetch, process, and save market data.
     """
-    # Load API and DB configuration
-    with open('config/api_config.json') as f:
-        api_config = json.load(f)
-    with open('config/db_config.json') as f:
-        db_config = json.load(f)
-
     # Step 1: Fetch market data
-    symbols = [SPY_SYMBOL, QQQ_SYMBOL]
-    raw_data = fetch_market_data(api_config['api_url'], api_config['api_key'], symbols)
+    symbols = [SP500_SYMBOL, NASDAQ100_SYMBOL]
+    raw_data = fetch_market_data(symbols)
 
     # Step 2: Process market data
     processed_data = process_market_data(raw_data)
 
     # Step 3: Save data to the database
-    save_market_data_to_db(processed_data, db_config)
+    save_market_data_to_db(processed_data)
 
     log_message("Market data fetched and saved successfully.")
