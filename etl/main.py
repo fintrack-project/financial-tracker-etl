@@ -6,7 +6,9 @@ def run_job(job_name):
     Dynamically import and run a specific ETL job.
     """
     try:
+        print(f"Attempting to import: etl.jobs.{job_name}")
         job_module = importlib.import_module(f"etl.jobs.{job_name}")
+        print(f"Successfully imported: etl.jobs.{job_name}")
         job_module.run()
     except ModuleNotFoundError:
         print(f"Error: Job '{job_name}' not found.")
