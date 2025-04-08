@@ -1,6 +1,6 @@
 import schedule
 import time
-from etl.jobs.fetch_live_market_average_data.fetch_live_market_average_data import run
+from etl.jobs.fetch_market_average_data.fetch_market_average_data import run
 
 def schedule_jobs():
     """
