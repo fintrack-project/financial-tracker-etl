@@ -58,7 +58,7 @@ def save_market_data_to_db(data):
     cursor = connection.cursor()
     for record in data:
         cursor.execute("""
-            INSERT INTO market_data (symbol, price, percent_change, timestamp)
+            INSERT INTO market_average_data (symbol, price, percent_change, timestamp)
             VALUES (%s, %s, %s, %s)
         """, (record['symbol'], record['price'], record['percent_change'], datetime.now()))
     connection.commit()
@@ -66,7 +66,7 @@ def save_market_data_to_db(data):
     connection.close()
 
 def run():
-    print("Running fetch_live_market_average_data job...")
+    print("Running fetch_market_average_data job...")
     """
     Main function to fetch, process, and save market data.
     """
