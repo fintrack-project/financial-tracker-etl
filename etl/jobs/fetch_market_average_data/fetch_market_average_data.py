@@ -42,11 +42,17 @@ def process_market_data(data):
     for symbol_data in results:
         symbol = symbol_data.get("symbol")
         price = symbol_data.get("regularMarketPrice")
+        price_change = symbol_data.get("regularMarketChange")
         percent_change = symbol_data.get("regularMarketChangePercent")
+        price_high = symbol_data.get("regularMarketDayHigh")
+        price_low = symbol_data.get("regularMarketDayLow")
         processed_data.append({
             "symbol": symbol,
             "price": price,
-            "percent_change": percent_change
+            "price_change": price_change,
+            "percent_change": percent_change,
+            "price_high": price_high,
+            "price_low": price_low
         })
     return processed_data
 
@@ -58,9 +64,17 @@ def save_market_data_to_db(data):
     cursor = connection.cursor()
     for record in data:
         cursor.execute("""
-            INSERT INTO market_average_data (symbol, price, percent_change, timestamp)
-            VALUES (%s, %s, %s, %s)
-        """, (record['symbol'], record['price'], record['percent_change'], datetime.now()))
+            INSERT INTO market_average_data (symbol, price, price_change, percent_change, price_high, price_low, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (
+            record['symbol'],
+            record['price'],
+            record['price_change'],
+            record['percent_change'],
+            record['price_high'],
+            record['price_low'],
+            datetime.now()
+        ))
     connection.commit()
     cursor.close()
     connection.close()
