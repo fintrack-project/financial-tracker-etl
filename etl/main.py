@@ -1,6 +1,15 @@
 import importlib
 import sys
 from confluent_kafka import Consumer, KafkaException, KafkaError
+from enum import Enum
+
+class KafkaTopics(Enum):
+    TRANSACTIONS_CONFIRMED = "TRANSACTIONS_CONFIRMED"
+    PROCESS_TRANSACTIONS_TO_HOLDINGS = "PROCESS_TRANSACTIONS_TO_HOLDINGS"
+
+TOPIC_TO_JOB_MAP = {
+    KafkaTopics.TRANSACTIONS_CONFIRMED.value: "process_transactions_to_holdings",
+}
 
 def run_job(job_name):
     """
@@ -21,7 +30,7 @@ def consume_kafka_messages():
     Consume messages from Kafka and trigger the appropriate job.
     """
     consumer_config = {
-        'bootstrap.servers': 'kafka:9092',  # Replace with your Kafka broker address
+        'bootstrap.servers': 'kafka:9093',  # Replace with your Kafka broker address
         'group.id': 'etl-job-consumer-group',
         'auto.offset.reset': 'earliest'
     }
@@ -53,8 +62,10 @@ def consume_kafka_messages():
             print(f"Received message on topic '{topic}': {value}")
 
             # Trigger the appropriate job based on the topic
-            if topic == 'TRANSACTION_CONFIRMED':
-                run_job('process_transactions_to_holdings')
+            if topic in TOPIC_TO_JOB_MAP:
+                job_name = TOPIC_TO_JOB_MAP[topic]
+                print(f"Triggering job: {job_name}")
+                run_job(job_name)
             else:
                 print(f"Unknown topic: {topic}")
 

@@ -80,7 +80,7 @@ def send_process_transactions_message():
     Send a PROCESS_TRANSACTIONS_TO_HOLDINGS message to notify the HoldingService.
     """
     producer_config = {
-        'bootstrap.servers': 'kafka:9092'  # Replace with your Kafka broker address
+        'bootstrap.servers': 'kafka:9093'  # Replace with your Kafka broker address
     }
     producer = Producer(producer_config)
 
