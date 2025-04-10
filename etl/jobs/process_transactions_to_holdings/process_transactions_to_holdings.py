@@ -1,4 +1,5 @@
 from datetime import datetime
+from confluent_kafka import Producer
 from etl.utils import get_db_connection, log_message
 
 def fetch_transactions():
@@ -74,6 +75,23 @@ def update_holdings(transactions):
         cursor.close()
         connection.close()
 
+def send_process_transactions_message():
+    """
+    Send a PROCESS_TRANSACTIONS_TO_HOLDINGS message to notify the HoldingService.
+    """
+    producer_config = {
+        'bootstrap.servers': 'kafka:9092'  # Replace with your Kafka broker address
+    }
+    producer = Producer(producer_config)
+
+    try:
+        producer.produce('PROCESS_TRANSACTIONS_TO_HOLDINGS', value='Holdings updated')
+        producer.flush()
+        log_message("PROCESS_TRANSACTIONS_TO_HOLDINGS message sent successfully.")
+    except Exception as e:
+        log_message(f"Error while sending PROCESS_TRANSACTIONS_TO_HOLDINGS message: {e}")
+        raise
+
 def run():
     """
     Main function to calculate and update holdings.
@@ -81,6 +99,7 @@ def run():
     log_message("Starting process_transactions_to_holdings job...")
     transactions = fetch_transactions()
     update_holdings(transactions)
+    send_process_transactions_message()
     log_message("process_transactions_to_holdings job completed successfully.")
 
 if __name__ == "__main__":

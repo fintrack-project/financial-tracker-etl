@@ -27,7 +27,7 @@ def consume_kafka_messages():
     }
 
     consumer = Consumer(consumer_config)
-    consumer.subscribe(['PROCESS_TRANSACTIONS_TO_HOLDINGS'])  # Add more topics if needed
+    consumer.subscribe(['TRANSACTION_CONFIRMED'])  # Add more topics if needed
 
     print("Kafka consumer started. Listening for messages...")
 
@@ -53,7 +53,7 @@ def consume_kafka_messages():
             print(f"Received message on topic '{topic}': {value}")
 
             # Trigger the appropriate job based on the topic
-            if topic == 'PROCESS_TRANSACTIONS_TO_HOLDINGS':
+            if topic == 'TRANSACTION_CONFIRMED':
                 run_job('process_transactions_to_holdings')
             else:
                 print(f"Unknown topic: {topic}")
