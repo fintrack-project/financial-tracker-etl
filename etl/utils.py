@@ -12,11 +12,11 @@ def get_db_connection(db_config=None):
     """
     if not db_config:
         db_config = {
-            "dbname": os.getenv("DB_NAME"),
-            "user": os.getenv("DB_USER"),
-            "password": os.getenv("DB_PASSWORD"),
-            "host": os.getenv("DB_HOST"),
-            "port": os.getenv("DB_PORT"),
+            "dbname": os.getenv("DATABASE_NAME"),
+            "user": os.getenv("DATABASE_USER"),
+            "password": os.getenv("DATABASE_PASSWORD"),
+            "host": os.getenv("DATABASE_HOST"),
+            "port": os.getenv("DATABASE_PORT"),
         }
     return psycopg2.connect(**db_config)
 

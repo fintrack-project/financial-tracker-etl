@@ -16,12 +16,17 @@ def run_job(job_name):
     Dynamically import and run a specific ETL job.
     """
     try:
-        print(f"Attempting to import: etl.jobs.{job_name}")
-        job_module = importlib.import_module(f"etl.jobs.{job_name}")
-        print(f"Successfully imported: etl.jobs.{job_name}")
+        print(f"Python module search path: {sys.path}")
+        print(f"Attempting to import: etl.jobs.{job_name}.{job_name}")
+        job_module = importlib.import_module(f"etl.jobs.{job_name}.{job_name}")
+        print(f"Successfully imported: etl.jobs.{job_name}.{job_name}")
+        print(f"Attempting to run the 'run()' function in {job_name}")
         job_module.run()
+        print(f"Successfully ran the 'run()' function in {job_name}")
     except ModuleNotFoundError:
         print(f"Error: Job '{job_name}' not found.")
+    except AttributeError:
+        print(f"Error: 'run()' function not found in job '{job_name}'.")
     except Exception as e:
         print(f"Error while running job '{job_name}': {e}")
 
@@ -36,7 +41,7 @@ def consume_kafka_messages():
     }
 
     consumer = Consumer(consumer_config)
-    consumer.subscribe(['TRANSACTION_CONFIRMED'])  # Add more topics if needed
+    consumer.subscribe([topic.value for topic in KafkaTopics])  # Add more topics if needed
 
     print("Kafka consumer started. Listening for messages...")
 
