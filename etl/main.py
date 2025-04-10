@@ -1,7 +1,9 @@
 import importlib
 import sys
+import os
 from confluent_kafka import Consumer, KafkaException, KafkaError
 from enum import Enum
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 class KafkaTopics(Enum):
     TRANSACTIONS_CONFIRMED = "TRANSACTIONS_CONFIRMED"
@@ -17,9 +19,9 @@ def run_job(job_name):
     """
     try:
         print(f"Python module search path: {sys.path}")
-        print(f"Attempting to import: etl.jobs.{job_name}.{job_name}")
-        job_module = importlib.import_module(f"etl.jobs.{job_name}.{job_name}")
-        print(f"Successfully imported: etl.jobs.{job_name}.{job_name}")
+        print(f"Attempting to import: etl.jobs.{job_name}")
+        job_module = importlib.import_module(f"etl.jobs.{job_name}")
+        print(f"Successfully imported: etl.jobs.{job_name}")
         print(f"Attempting to run the 'run()' function in {job_name}")
         job_module.run()
         print(f"Successfully ran the 'run()' function in {job_name}")
@@ -83,4 +85,4 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "consume":
         consume_kafka_messages()
     else:
-        print("Usage: python main.py consume")
+        print("Usage: python3 -m etl.main consume")

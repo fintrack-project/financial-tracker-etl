@@ -16,7 +16,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the entire project directory into the container
-COPY . .
+COPY . /app
 
 # Set the default command to run the main.py script
-CMD ["python", "etl/main.py", "consume"]
+CMD ["python3", "-m", "etl.main", "consume"]

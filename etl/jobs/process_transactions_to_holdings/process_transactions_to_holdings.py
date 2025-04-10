@@ -1,7 +1,9 @@
+import sys
+import os
 from datetime import datetime
 from confluent_kafka import Producer
 from etl.utils import get_db_connection, log_message
-
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 def fetch_transactions():
     """
     Fetch all transactions ordered by account_id, asset_name, and date.
