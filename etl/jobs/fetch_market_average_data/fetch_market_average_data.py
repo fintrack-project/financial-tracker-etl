@@ -17,9 +17,15 @@ def get_existing_market_average_data(index_names, closest_closing_time):
 
     try:
         cursor.execute("""
+            WITH latest_data AS (
+                SELECT symbol, price, price_change, percent_change, price_high, price_low, timestamp,
+                       ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) AS row_num
+                FROM market_average_data
+                WHERE symbol = ANY(%s) AND timestamp < %s
+            )
             SELECT symbol, price, price_change, percent_change, price_high, price_low, timestamp
-            FROM market_average_data
-            WHERE symbol = ANY(%s) AND (symbol IS NULL OR timestamp < %s)
+            FROM latest_data
+            WHERE row_num = 1
         """, (index_names, closest_closing_time))
 
         existing_data = cursor.fetchall()
@@ -134,6 +140,8 @@ def run(index_names):
 
     # Step 2: Check existing data
     existing_data = get_existing_market_average_data(index_names, closest_closing_time_utc)
+    log_message(f"There are {len(existing_data)} Existing market average data")
+    log_message(f"There are {len(index_names)} index names for market average data")
     if len(existing_data) == len(index_names):
         log_message("All market average data is up-to-date. Using existing data.")
         publish_market_average_data_update_complete(existing_data)
