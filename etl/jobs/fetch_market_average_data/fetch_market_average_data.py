@@ -95,3 +95,6 @@ def run():
     save_market_data_to_db(processed_data)
 
     log_message("Market data fetched and saved successfully.")
+
+if __name__ == "__main__":
+    run()
