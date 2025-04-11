@@ -164,6 +164,6 @@ def run(asset_names):
     update_asset_prices_in_db(asset_prices)
 
     # Step 5: Publish Kafka topic
-    publish_price_update_complete(asset_names_needing_update)
+    publish_price_update_complete(asset_names)
 
     log_message("update_asset_prices job completed successfully.")
