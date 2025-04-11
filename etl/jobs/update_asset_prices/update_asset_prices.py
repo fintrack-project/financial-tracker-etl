@@ -1,7 +1,6 @@
 from etl.utils import get_db_connection, log_message, fetch_market_data
 from confluent_kafka import Producer
 from main import publish_kafka_messages, ProducerKafkaTopics
-import json
 from datetime import datetime, timedelta
 import pytz
 
