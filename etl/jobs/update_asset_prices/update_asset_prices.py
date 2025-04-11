@@ -90,6 +90,10 @@ def update_asset_prices_in_db(asset_prices):
     """
     Update the database with the latest price data for the assets.
     """
+    if not asset_prices:
+        log_message("No asset prices provided for database update.")
+        return
+
     log_message("Updating asset prices in the database...")
     connection = get_db_connection()
     cursor = connection.cursor()
@@ -127,6 +131,10 @@ def publish_price_update_complete(asset_names):
     """
     Publish a Kafka topic indicating that the price data is ready.
     """
+    if not asset_names:
+        log_message("No asset names provided for Kafka topic publication.")
+        return
+    
     log_message("Publishing Kafka topic: ASSET_PRICE_UPDATE_COMPLETE...")
     producer_config = {
         'bootstrap.servers': 'kafka:9093',  # Replace with your Kafka broker address
