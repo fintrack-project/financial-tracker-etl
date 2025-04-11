@@ -1,7 +1,90 @@
 from etl.utils import get_db_connection, log_message, fetch_market_data
 from confluent_kafka import Producer
-import os
 import json
+from datetime import datetime, timedelta
+import pytz
+
+def validate_asset_names(asset_names):
+    """
+    Validate that the provided asset_names exist in the holdings table.
+    """
+    log_message("Validating asset names against the holdings table...")
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    try:
+        # Query to check which asset_names exist in the holdings table
+        cursor.execute("""
+            SELECT DISTINCT asset_name
+            FROM holdings
+            WHERE asset_name = ANY(%s)
+        """, (asset_names,))
+
+        # Extract valid asset names from the query result
+        valid_asset_names = [row[0] for row in cursor.fetchall()]
+        invalid_asset_names = set(asset_names) - set(valid_asset_names)
+
+        if invalid_asset_names:
+            log_message(f"Warning: The following asset names do not exist in the holdings table and will be ignored: {invalid_asset_names}")
+
+        return valid_asset_names
+
+    except Exception as e:
+        log_message(f"Error validating asset names: {e}")
+        raise
+    finally:
+        cursor.close()
+        connection.close()
+
+def get_assets_needing_update(asset_names):
+    """
+    Fetch the list of assets that need price updates.
+    - Assets that do not exist in the market_data table.
+    - Assets whose timestamp is earlier than the most recent US market closing time.
+    """
+    log_message("Fetching assets that need price updates...")
+
+    # Calculate the most recent US market closing time
+    eastern = pytz.timezone("US/Eastern")
+    utc = pytz.utc
+    now = datetime.now(eastern)
+
+    if now.hour < 16:  # Before today's market closing time
+        # Use yesterday's closing time
+        most_recent_closing_time = (now - timedelta(days=1)).replace(hour=16, minute=0, second=0, microsecond=0)
+    else:  # After today's market closing time
+        # Use today's closing time
+        most_recent_closing_time = now.replace(hour=16, minute=0, second=0, microsecond=0)
+
+    # Convert to UTC for database comparison
+    most_recent_closing_time_utc = most_recent_closing_time.astimezone(utc)
+
+    log_message(f"Most recent US market closing time in UTC: {most_recent_closing_time_utc}")
+
+    # Query the database
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    try:
+        # Fetch assets that either do not exist in market_data or have outdated timestamps
+        cursor.execute("""
+            SELECT DISTINCT t.asset_name
+            FROM transactions t
+            LEFT JOIN market_data m ON t.asset_name = m.symbol
+            WHERE t.asset_name = ANY(%s) AND (m.symbol IS NULL OR m.timestamp < %s)
+        """, (asset_names, most_recent_closing_time_utc))
+
+        # Extract asset names from the query result
+        assets_needing_update = [row[0] for row in cursor.fetchall()]
+        log_message(f"Found {len(assets_needing_update)} assets needing updates.")
+        return assets_needing_update
+
+    except Exception as e:
+        log_message(f"Error fetching assets needing updates: {e}")
+        raise
+    finally:
+        cursor.close()
+        connection.close()
 
 def update_asset_prices_in_db(asset_prices):
     """
@@ -59,29 +142,31 @@ def publish_price_update_complete(asset_names):
         log_message(f"Error publishing Kafka topic: {e}")
         raise
 
-def run():
+def run(asset_names):
     """
     Main function to fetch and update asset prices.
     """
     log_message("Starting update_asset_prices job...")
 
-    # Fetch assets from the database
-    connection = get_db_connection()
-    cursor = connection.cursor()
-    try:
-        cursor.execute("SELECT DISTINCT asset_name FROM transactions")
-        asset_names = [row[0] for row in cursor.fetchall()]
-    finally:
-        cursor.close()
-        connection.close()
+    # Step 1: Validate asset names
+    valid_asset_names = validate_asset_names(asset_names)
+    if not valid_asset_names:
+        log_message("No valid asset names found. Exiting job.")
+        return
+    
+    # Step 2: Determine which assets need updates
+    asset_names_needing_update = get_assets_needing_update(valid_asset_names)
+    if not asset_names_needing_update:
+        log_message("No assets need updates. Exiting job.")
+        return
 
-    # Fetch price data
-    asset_prices = fetch_market_data(asset_names)
+    # Step 3: Fetch price data
+    asset_prices = fetch_market_data(asset_names_needing_update)
 
-    # Update the database
+    # Step 4: Update the database
     update_asset_prices_in_db(asset_prices)
 
-    # Publish Kafka topic
-    publish_price_update_complete(asset_names)
+    # Step 5: Publish Kafka topic
+    publish_price_update_complete(asset_names_needing_update)
 
     log_message("update_asset_prices job completed successfully.")

@@ -1,4 +1,3 @@
-import os
 from datetime import datetime
 from dotenv import load_dotenv
 from etl.utils import get_db_connection, log_message, load_env_variables, fetch_market_data
