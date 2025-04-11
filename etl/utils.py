@@ -5,7 +5,9 @@ import requests
 import json
 from dotenv import load_dotenv
 import os
-# sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from datetime import datetime, timedelta
+import pytz
+from urllib.parse import quote
 
 # Load environment variables from .env file
 load_dotenv()
@@ -69,7 +71,7 @@ def fetch_market_data(symbols):
         "X-RapidAPI-Key": api_key,
         "X-RapidAPI-Host": "apidojo-yahoo-finance-v1.p.rapidapi.com"
     }
-    params = {"symbols": ",".join(symbols)}
+    params = {"symbols": ",".join([quote(symbol) for symbol in symbols])}
 
     try:
         response = requests.get(api_url, headers=headers, params=params)
@@ -86,3 +88,20 @@ def fetch_market_data(symbols):
     except requests.exceptions.RequestException as e:
         log_message(f"Error fetching market data: {e}")
         raise
+
+def get_closest_us_market_closing_time():
+    """
+    Calculate the most recent US market closing time (4:00 PM EDT).
+    """
+    eastern = pytz.timezone("US/Eastern")
+    utc = pytz.utc
+    now = datetime.now(eastern)
+
+    if now.hour < 16:  # Before today's market closing time
+        # Use yesterday's closing time
+        closest_closing_time = (now - timedelta(days=1)).replace(hour=16, minute=0, second=0, microsecond=0)
+    else:  # After today's market closing time
+        # Use today's closing time
+        closest_closing_time = now.replace(hour=16, minute=0, second=0, microsecond=0)
+
+    return closest_closing_time.astimezone(utc)

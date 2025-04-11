@@ -13,18 +13,22 @@ class ConsumerKafkaTopics(Enum):
     """
     TRANSACTIONS_CONFIRMED = "TRANSACTIONS_CONFIRMED"
     MARKET_DATA_UPDATE_REQUEST = "MARKET_DATA_UPDATE_REQUEST"
+    MARKET_AVERAGE_DATA_UPDATE_REQUEST = "MARKET_AVERAGE_DATA_UPDATE_REQUEST"
 
 class ProducerKafkaTopics(Enum):
     """
     Kafka topics that the ETL system produces messages to.
     """
     MARKET_DATA_UPDATE_COMPLETE = "MARKET_DATA_UPDATE_COMPLETE"
+    MARKET_AVERAGE_DATA_UPDATE_COMPLETE = "MARKET_AVERAGE_DATA_UPDATE_COMPLETE"
     PROCESS_TRANSACTIONS_TO_HOLDINGS = "PROCESS_TRANSACTIONS_TO_HOLDINGS"
+
 
 # Updated TOPIC_TO_JOB_MAP structure
 TOPIC_TO_JOB_MAP = {
     ConsumerKafkaTopics.TRANSACTIONS_CONFIRMED.value: {"job_name": "process_transactions_to_holdings", "requires_params": False},
-    ConsumerKafkaTopics.MARKET_DATA_UPDATE_REQUEST.value: {"job_name": "update_market_data", "requires_params": True}
+    ConsumerKafkaTopics.MARKET_DATA_UPDATE_REQUEST.value: {"job_name": "update_market_data", "requires_params": True},
+    ConsumerKafkaTopics.MARKET_AVERAGE_DATA_UPDATE_REQUEST.value: {"job_name": "fetch_market_average_data", "requires_params": True}
 }
 
 def run_job(job_name, params=None):
