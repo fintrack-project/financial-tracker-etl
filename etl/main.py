@@ -1,6 +1,7 @@
 import importlib
 import sys
 import os
+import json
 from confluent_kafka import Consumer, KafkaException, KafkaError
 from enum import Enum
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -11,22 +12,30 @@ class KafkaTopics(Enum):
     ASSET_PRICE_UPDATE_REQUEST = "ASSET_PRICE_UPDATE_REQUEST"
     ASSET_PRICE_UPDATE_COMPLETE = "ASSET_PRICE_UPDATE_COMPLETE"
 
+# Updated TOPIC_TO_JOB_MAP structure
 TOPIC_TO_JOB_MAP = {
-    KafkaTopics.TRANSACTIONS_CONFIRMED.value: "process_transactions_to_holdings",
-    KafkaTopics.ASSET_PRICE_UPDATE_REQUEST.value: "update_asset_prices"
+    KafkaTopics.TRANSACTIONS_CONFIRMED.value: {"job_name": "process_transactions_to_holdings", "requires_params": False},
+    KafkaTopics.ASSET_PRICE_UPDATE_REQUEST.value: {"job_name": "update_asset_prices", "requires_params": True}
 }
 
-def run_job(job_name):
+def run_job(job_name, params=None):
     """
     Dynamically import and run a specific ETL job.
+    If params are provided, pass them to the job's run() function.
     """
     try:
         print(f"Python module search path: {sys.path}")
         print(f"Attempting to import: etl.jobs.{job_name}")
         job_module = importlib.import_module(f"etl.jobs.{job_name}")
         print(f"Successfully imported: etl.jobs.{job_name}")
-        print(f"Attempting to run the 'run()' function in {job_name}")
-        job_module.run()
+
+        if params:
+            print(f"Attempting to run the 'run()' function in {job_name} with parameters: {params}")
+            job_module.run(params)
+        else:
+            print(f"Attempting to run the 'run()' function in {job_name} without parameters")
+            job_module.run()
+
         print(f"Successfully ran the 'run()' function in {job_name}")
     except ModuleNotFoundError:
         print(f"Error: Job '{job_name}' not found.")
@@ -71,11 +80,29 @@ def consume_kafka_messages():
             value = msg.value().decode('utf-8')
             print(f"Received message on topic '{topic}': {value}")
 
+            # Handle empty content
+            if not value.strip():
+                print(f"Warning: Received empty message on topic '{topic}'. Skipping processing.")
+                continue
+
             # Trigger the appropriate job based on the topic
             if topic in TOPIC_TO_JOB_MAP:
-                job_name = TOPIC_TO_JOB_MAP[topic]
+                job_config = TOPIC_TO_JOB_MAP[topic]
+                job_name = job_config["job_name"]
+                requires_params = job_config["requires_params"]
+
                 print(f"Triggering job: {job_name}")
-                run_job(job_name)
+
+                if requires_params:
+                    try:
+                        # Parse the message content as JSON
+                        message_content = json.loads(value)
+                        run_job(job_name, message_content)
+                    except json.JSONDecodeError:
+                        print(f"Error: Failed to decode JSON message on topic '{topic}'. Skipping job '{job_name}'.")
+                        continue
+                else:
+                    run_job(job_name)
             else:
                 print(f"Unknown topic: {topic}")
 
