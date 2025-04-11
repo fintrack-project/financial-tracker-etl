@@ -1,4 +1,4 @@
-from etl.utils import get_db_connection, log_message, fetch_market_data
+from etl.utils import get_db_connection, log_message, fetch_market_data, get_closest_us_market_closing_time
 from confluent_kafka import Producer
 from main import publish_kafka_messages, ProducerKafkaTopics
 from datetime import datetime, timedelta
@@ -46,19 +46,7 @@ def get_assets_needing_update(asset_names):
     log_message("Fetching assets that need price updates...")
 
     # Calculate the most recent US market closing time
-    eastern = pytz.timezone("US/Eastern")
-    utc = pytz.utc
-    now = datetime.now(eastern)
-
-    if now.hour < 16:  # Before today's market closing time
-        # Use yesterday's closing time
-        most_recent_closing_time = (now - timedelta(days=1)).replace(hour=16, minute=0, second=0, microsecond=0)
-    else:  # After today's market closing time
-        # Use today's closing time
-        most_recent_closing_time = now.replace(hour=16, minute=0, second=0, microsecond=0)
-
-    # Convert to UTC for database comparison
-    most_recent_closing_time_utc = most_recent_closing_time.astimezone(utc)
+    most_recent_closing_time_utc = get_closest_us_market_closing_time()
 
     log_message(f"Most recent US market closing time in UTC: {most_recent_closing_time_utc}")
 

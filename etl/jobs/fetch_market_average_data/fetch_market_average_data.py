@@ -1,10 +1,47 @@
-from datetime import datetime
+from datetime import datetime, timedelta
+import pytz
 from dotenv import load_dotenv
-from etl.utils import get_db_connection, log_message, load_env_variables, fetch_market_data
+from etl.utils import get_db_connection, log_message, load_env_variables, fetch_market_data, get_closest_us_market_closing_time
 from main import publish_kafka_messages, ProducerKafkaTopics
 
 # Load environment variables from .env file
 env_vars = load_env_variables()
+
+def get_existing_market_average_data(index_names, closest_closing_time):
+    """
+    Check if market average data exists for the closest US market closing time.
+    """
+    log_message("Checking existing market average data...")
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT symbol, price, price_change, percent_change, price_high, price_low, timestamp
+            FROM market_average_data
+            WHERE symbol = ANY(%s) AND timestamp = %s
+        """, (index_names, closest_closing_time))
+
+        existing_data = cursor.fetchall()
+        log_message(f"Found {len(existing_data)} existing market average data records.")
+        return [
+            {
+                "symbol": row[0],
+                "price": row[1],
+                "price_change": row[2],
+                "percent_change": row[3],
+                "price_high": row[4],
+                "price_low": row[5],
+                "timestamp": row[6]
+            }
+            for row in existing_data
+        ]
+    except Exception as e:
+        log_message(f"Error checking existing market average data: {e}")
+        raise
+    finally:
+        cursor.close()
+        connection.close()
 
 def process_market_data(data):
     """
@@ -34,22 +71,29 @@ def save_market_data_to_db(data):
     """
     connection = get_db_connection()
     cursor = connection.cursor()
-    for record in data:
-        cursor.execute("""
-            INSERT INTO market_average_data (symbol, price, price_change, percent_change, price_high, price_low, timestamp)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (
-            record['symbol'],
-            record['price'],
-            record['price_change'],
-            record['percent_change'],
-            record['price_high'],
-            record['price_low'],
-            datetime.now()
-        ))
-    connection.commit()
-    cursor.close()
-    connection.close()
+    try:
+        for record in data:
+            cursor.execute("""
+                INSERT INTO market_average_data (symbol, price, price_change, percent_change, price_high, price_low, timestamp)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (
+                record['symbol'],
+                record['price'],
+                record['price_change'],
+                record['percent_change'],
+                record['price_high'],
+                record['price_low'],
+                datetime.now()
+            ))
+        connection.commit()
+        log_message("Market average data saved successfully in the database.")
+    except Exception as e:
+        connection.rollback()
+        log_message(f"Error saving market average data to the database: {e}")
+        raise
+    finally:
+        cursor.close()
+        connection.close()
 
 def publish_market_average_data_update_complete(data):
     """
@@ -74,16 +118,28 @@ def run(index_names):
     """
     Main function to fetch, process, and save market data.
     """
-    # Step 1: Fetch market data
-    raw_data = fetch_market_data(index_names)
+    log_message("Starting fetch_market_average_data job...")
 
-    # Step 2: Process market data
+    # Step 1: Determine the closest US market closing time
+    closest_closing_time_utc = get_closest_us_market_closing_time()
+    log_message(f"Closest US market closing time in UTC: {closest_closing_time_utc}")
+
+    # Step 2: Check existing data
+    existing_data = get_existing_market_average_data(index_names, closest_closing_time_utc)
+    if len(existing_data) == len(index_names):
+        log_message("All market average data is up-to-date. Using existing data.")
+        publish_market_average_data_update_complete(existing_data)
+        return
+
+    # Step 3: Fetch market data and process it if necessary
+    log_message("Fetching market data from external API...")
+    raw_data = fetch_market_data(index_names)
     processed_data = process_market_data(raw_data)
 
-    # Step 3: Save data to the database
+    # Step 4: Save data to the database
     save_market_data_to_db(processed_data)
 
-    # Step 4: Publish Kafka topic
+    # Step 6: Publish Kafka topic
     publish_market_average_data_update_complete(processed_data)
 
     log_message("Market data fetched and saved successfully.")
