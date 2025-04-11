@@ -1,6 +1,8 @@
 import psycopg2
 import sys
 import logging
+import requests
+import json
 from dotenv import load_dotenv
 import os
 # sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -12,12 +14,6 @@ def get_db_connection(db_config=None):
     """
     Establish a connection to the database.
     """
-    # print("Loaded environment variables:")
-    # print(f"DATABASE_NAME: {os.getenv('DATABASE_NAME')}")
-    # print(f"DATABASE_USER: {os.getenv('DATABASE_USER')}")
-    # print(f"DATABASE_PASSWORD: {os.getenv('DATABASE_PASSWORD')}")
-    # print(f"DATABASE_HOST: {os.getenv('DATABASE_HOST')}")
-    # print(f"DATABASE_PORT: {os.getenv('DATABASE_PORT')}")
     if not db_config:
         db_config = {
             "dbname": os.getenv("DATABASE_NAME"),
@@ -57,3 +53,36 @@ def load_env_variables(env_file=".env"):
     else:
         raise FileNotFoundError(f"{env_file} file not found.")
     return env_vars
+
+def fetch_market_data(symbols):
+    """
+    Fetch market data for the given symbols from Yahoo Finance via RapidAPI.
+    """
+    log_message("Fetching market data from external API...")
+    api_url = os.getenv("RAPIDAPI_URL")
+    api_key = os.getenv("RAPIDAPI_KEY")
+
+    if not api_url or not api_key:
+        raise ValueError("API_URL or API_KEY is not set. Check your .env file.")
+
+    headers = {
+        "X-RapidAPI-Key": api_key,
+        "X-RapidAPI-Host": "apidojo-yahoo-finance-v1.p.rapidapi.com"
+    }
+    params = {"symbols": ",".join(symbols)}
+
+    try:
+        response = requests.get(api_url, headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        # Validate response structure
+        if "quoteResponse" not in data or "result" not in data["quoteResponse"]:
+            raise ValueError("Invalid API response format")
+
+        log_message(f"Successfully fetched market data for {len(data['quoteResponse']['result'])} symbols.")
+        return data["quoteResponse"]["result"]
+
+    except requests.exceptions.RequestException as e:
+        log_message(f"Error fetching market data: {e}")
+        raise
