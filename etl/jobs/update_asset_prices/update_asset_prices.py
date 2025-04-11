@@ -127,7 +127,7 @@ def update_asset_prices_in_db(asset_prices):
         cursor.close()
         connection.close()
     
-def publish_price_update_complete(asset_names):
+def publish_price_update_complete(asset_names, asset_names_needing_update):
     """
     Publish a Kafka topic indicating that the price data is ready.
     """
@@ -136,7 +136,7 @@ def publish_price_update_complete(asset_names):
         return
 
     # Use the centralized publish_kafka_messages method
-    params = {"assets": asset_names, "status": "complete"}
+    params = {"assets": asset_names, "updatedAssets": asset_names_needing_update, "status": "complete"}
     publish_kafka_messages(ProducerKafkaTopics.ASSET_PRICE_UPDATE_COMPLETE, params)
 
 def run(asset_names):
@@ -164,6 +164,6 @@ def run(asset_names):
     update_asset_prices_in_db(asset_prices)
 
     # Step 5: Publish Kafka topic
-    publish_price_update_complete(asset_names)
+    publish_price_update_complete(asset_names, asset_names_needing_update)
 
     log_message("update_asset_prices job completed successfully.")
