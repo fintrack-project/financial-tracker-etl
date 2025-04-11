@@ -19,7 +19,7 @@ def get_existing_market_average_data(index_names, closest_closing_time):
         cursor.execute("""
             SELECT symbol, price, price_change, percent_change, price_high, price_low, timestamp
             FROM market_average_data
-            WHERE symbol = ANY(%s) AND timestamp = %s
+            WHERE symbol = ANY(%s) AND (symbol IS NULL OR timestamp < %s)
         """, (index_names, closest_closing_time))
 
         existing_data = cursor.fetchall()
