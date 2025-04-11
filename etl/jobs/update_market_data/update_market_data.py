@@ -111,11 +111,6 @@ def update_asset_prices_in_db(asset_prices):
             cursor.execute("""
                 INSERT INTO market_data (symbol, price, percent_change, timestamp, asset_name, price_unit)
                 VALUES (%s, %s, %s, to_timestamp(%s), %s, %s)
-                ON CONFLICT (symbol) DO UPDATE
-                SET price = EXCLUDED.price,
-                    percent_change = EXCLUDED.percent_change,
-                    timestamp = EXCLUDED.timestamp,
-                    price_unit = EXCLUDED.price_unit
             """, (symbol, price, percent_change, timestamp, symbol, price_unit))
 
         connection.commit()
@@ -146,6 +141,14 @@ def run(asset_names):
     """
     log_message("Starting update_market_data job...")
 
+    # Extract the list of asset names if the input is a dictionary
+    if isinstance(asset_names, dict) and "asset_names" in asset_names:
+        asset_names = asset_names["asset_names"]
+
+    if not isinstance(asset_names, list):
+        log_message("Error: asset_names must be a list of strings.")
+        return
+    
     # Step 1: Validate asset names
     valid_asset_names = validate_asset_names(asset_names)
     if not valid_asset_names:
