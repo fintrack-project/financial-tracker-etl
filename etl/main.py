@@ -2,8 +2,9 @@ import importlib
 import sys
 import os
 import json
-from confluent_kafka import Consumer, KafkaException, KafkaError
+from confluent_kafka import Consumer, Producer, KafkaException, KafkaError
 from enum import Enum
+from etl.utils import log_message
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 class ConsumerKafkaTopics(Enum):
@@ -118,6 +119,31 @@ def consume_kafka_messages():
         print("Kafka consumer interrupted.")
     finally:
         consumer.close()
+
+def publish_kafka_messages(topic, params=None):
+    """
+    Publish a message to a Kafka topic.
+    
+    Args:
+        topic (ProducerKafkaTopics): The Kafka topic to publish the message to.
+        params (dict, optional): The message payload to be serialized as JSON.
+    """
+    log_message(f"Publishing Kafka message to topic: {topic.value}...")
+
+    producer_config = {
+        'bootstrap.servers': 'kafka:9093',  # Replace with your Kafka broker address
+    }
+    producer = Producer(producer_config)
+
+    try:
+        # Serialize the message payload as JSON
+        message = json.dumps(params) if params else "{}"
+        producer.produce(topic.value, key="key", value=message)
+        producer.flush()
+        log_message(f"Successfully published message to topic: {topic.value}")
+    except Exception as e:
+        log_message(f"Error publishing Kafka message to topic {topic.value}: {e}")
+        raise
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "consume":

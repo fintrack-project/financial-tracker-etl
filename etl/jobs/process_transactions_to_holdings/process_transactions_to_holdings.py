@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 from confluent_kafka import Producer
 from etl.utils import get_db_connection, log_message
-from main import ProducerKafkaTopics
+from main import publish_kafka_messages, ProducerKafkaTopics
 import json
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 def fetch_transactions():
@@ -81,22 +81,11 @@ def update_holdings(transactions):
 
 def publish_transactions_processed():
     """
-    Send a PROCESS_TRANSACTIONS_TO_HOLDINGS message to notify the HoldingService.
+    Publish a Kafka topic indicating that transactions have been processed.
     """
-    log_message(f"Publishing Kafka topic: {ProducerKafkaTopics.PROCESS_TRANSACTIONS_TO_HOLDINGS.value}...")
-    producer_config = {
-        'bootstrap.servers': 'kafka:9093',  # Replace with your Kafka broker address
-    }
-    producer = Producer(producer_config)
-
-    try:
-        message = json.dumps({"status": "transactions_processed"})
-        producer.produce(ProducerKafkaTopics.PROCESS_TRANSACTIONS_TO_HOLDINGS.value, key="transactions", value=message)
-        producer.flush()
-        log_message(f"Published Kafka topic: {ProducerKafkaTopics.PROCESS_TRANSACTIONS_TO_HOLDINGS.value}")
-    except Exception as e:
-        log_message(f"Error publishing Kafka topic: {e}")
-        raise
+    # Use the centralized publish_kafka_messages method
+    params = {"status": "transactions_processed"}
+    publish_kafka_messages(ProducerKafkaTopics.PROCESS_TRANSACTIONS_TO_HOLDINGS, params)
 
 def run():
     """
