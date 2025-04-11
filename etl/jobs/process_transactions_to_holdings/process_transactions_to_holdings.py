@@ -4,7 +4,7 @@ from datetime import datetime
 from confluent_kafka import Producer
 from etl.utils import get_db_connection, log_message
 from main import publish_kafka_messages, ProducerKafkaTopics
-import json
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 def fetch_transactions():
     """
