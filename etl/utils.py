@@ -12,12 +12,6 @@ def get_db_connection(db_config=None):
     """
     Establish a connection to the database.
     """
-    # print("Loaded environment variables:")
-    # print(f"DATABASE_NAME: {os.getenv('DATABASE_NAME')}")
-    # print(f"DATABASE_USER: {os.getenv('DATABASE_USER')}")
-    # print(f"DATABASE_PASSWORD: {os.getenv('DATABASE_PASSWORD')}")
-    # print(f"DATABASE_HOST: {os.getenv('DATABASE_HOST')}")
-    # print(f"DATABASE_PORT: {os.getenv('DATABASE_PORT')}")
     if not db_config:
         db_config = {
             "dbname": os.getenv("DATABASE_NAME"),

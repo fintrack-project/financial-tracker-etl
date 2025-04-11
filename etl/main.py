@@ -8,9 +8,12 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 class KafkaTopics(Enum):
     TRANSACTIONS_CONFIRMED = "TRANSACTIONS_CONFIRMED"
     PROCESS_TRANSACTIONS_TO_HOLDINGS = "PROCESS_TRANSACTIONS_TO_HOLDINGS"
+    ASSET_PRICE_UPDATE_REQUEST = "ASSET_PRICE_UPDATE_REQUEST"
+    ASSET_PRICE_UPDATE_COMPLETE = "ASSET_PRICE_UPDATE_COMPLETE"
 
 TOPIC_TO_JOB_MAP = {
     KafkaTopics.TRANSACTIONS_CONFIRMED.value: "process_transactions_to_holdings",
+    KafkaTopics.ASSET_PRICE_UPDATE_REQUEST.value: "update_asset_prices"
 }
 
 def run_job(job_name):
