@@ -9,6 +9,7 @@ def validate_asset_names(asset_names):
     Validate that the provided asset_names exist in the holdings table.
     """
     log_message("Validating asset names against the holdings table...")
+    log_message(f"Asset names to validate: {asset_names}")
     connection = get_db_connection()
     cursor = connection.cursor()
 
@@ -143,7 +144,7 @@ def run(asset_names):
     """
     Main function to fetch and update asset prices.
     """
-    log_message("Starting update_asset_prices job...")
+    log_message("Starting update_market_data job...")
 
     # Step 1: Validate asset names
     valid_asset_names = validate_asset_names(asset_names)
@@ -166,4 +167,4 @@ def run(asset_names):
     # Step 5: Publish Kafka topic
     publish_price_update_complete(asset_names, asset_names_needing_update)
 
-    log_message("update_asset_prices job completed successfully.")
+    log_message("update_market_data job completed successfully.")
