@@ -3,4 +3,4 @@ This module is part of the ETL (Extract, Transform, Load) process for updating a
 It contains the function to run the update asset prices job.
 """
 
-from .update_asset_prices import run
+from .update_market_data import run
