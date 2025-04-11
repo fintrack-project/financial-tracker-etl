@@ -1,57 +1,7 @@
-import requests
-from etl.utils import get_db_connection, log_message
+from etl.utils import get_db_connection, log_message, fetch_market_data
 from confluent_kafka import Producer
 import os
 import json
-
-def fetch_market_data(asset_names):
-    """
-    Fetch the latest price data for the given assets from an external API.
-    """
-    api_url = os.getenv("RAPIDAPI_URL")
-    api_key = os.getenv("RAPIDAPI_KEY")
-
-    if not api_url or not api_key:
-        raise ValueError("API_URL or API_KEY is not set. Check your .env file.")
-
-    headers = {
-        "X-RapidAPI-Key": api_key,
-        "X-RapidAPI-Host": "apidojo-yahoo-finance-v1.p.rapidapi.com"
-    }
-    params = {"symbols": ",".join(asset_names)}
-
-    try:
-        response = requests.get(api_url, headers=headers, params=params)
-        response.raise_for_status()
-        data = response.json()
-
-        # Validate response structure
-        if "quoteResponse" not in data or "result" not in data["quoteResponse"]:
-            raise ValueError("Invalid API response format")
-
-        # Extract relevant fields for each asset
-        asset_prices = {}
-        for asset in data["quoteResponse"]["result"]:
-            symbol = asset.get("symbol")
-            price = asset.get("regularMarketPrice")
-            percent_change = asset.get("regularMarketChangePercent", 0)  # Default to 0 if not provided
-            timestamp = asset.get("regularMarketTime")  # Unix timestamp
-            price_unit = asset.get("currency", "USD")  # Default to USD if not provided
-
-            if symbol and price is not None:
-                asset_prices[symbol] = {
-                    "price": price,
-                    "percent_change": percent_change,
-                    "timestamp": timestamp,
-                    "price_unit": price_unit
-                }
-
-        log_message(f"Successfully fetched market data for {len(asset_prices)} assets.")
-        return asset_prices
-
-    except requests.exceptions.RequestException as e:
-        log_message(f"Error fetching market data: {e}")
-        raise
 
 def update_asset_prices_in_db(asset_prices):
     """
@@ -62,12 +12,12 @@ def update_asset_prices_in_db(asset_prices):
     cursor = connection.cursor()
 
     try:
-        for symbol, price_data in asset_prices.items():
-            # Extract relevant fields from the parsed API response
-            price = price_data["price"]
-            percent_change = price_data["percent_change"]
-            timestamp = price_data["timestamp"]
-            price_unit = price_data["price_unit"]
+        for symbol_data in asset_prices:
+            symbol = symbol_data.get("symbol")
+            price = symbol_data.get("regularMarketPrice")
+            percent_change = symbol_data.get("regularMarketChangePercent", 0)
+            timestamp = symbol_data.get("regularMarketTime")
+            price_unit = symbol_data.get("currency", "USD")
 
             # Insert or update the market_data table
             cursor.execute("""

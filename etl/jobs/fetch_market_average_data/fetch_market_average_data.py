@@ -1,8 +1,7 @@
-import requests
 import os
 from datetime import datetime
 from dotenv import load_dotenv
-from etl.utils import get_db_connection, log_message, load_env_variables
+from etl.utils import get_db_connection, log_message, load_env_variables, fetch_market_data
 
 # Load environment variables from .env file
 env_vars = load_env_variables()
@@ -12,34 +11,12 @@ SP500_SYMBOL = "^GSPC"
 NASDAQ100_SYMBOL = "^NDX"
 US_MARKET_CLOSE_TIME = "16:00"  # 4:00 PM ET^
 
-def fetch_market_data(symbols):
-    """
-    Fetch market data for the given symbols from Yahoo Finance via RapidAPI.
-    """
-    api_url = env_vars.get("RAPIDAPI_URL")
-    api_key = env_vars.get("RAPIDAPI_KEY")
-
-    if not api_url or not api_key:
-        raise ValueError("API_URL or API_KEY is not set. Check your .env file.")
-
-    headers = {
-        "X-RapidAPI-Key": api_key,
-        "X-RapidAPI-Host": "apidojo-yahoo-finance-v1.p.rapidapi.com"
-    }
-    params = {"symbols": ",".join(symbols)}
-    response = requests.get(api_url, headers=headers, params=params)
-    response.raise_for_status()
-
-    return response.json()
-
 def process_market_data(data):
     """
     Extract price and percent dropped for each symbol.
     """
     processed_data = []
-    # Navigate to the "result" array in the response
-    results = data.get("quoteResponse", {}).get("result", [])
-    for symbol_data in results:
+    for symbol_data in data:
         symbol = symbol_data.get("symbol")
         price = symbol_data.get("regularMarketPrice")
         price_change = symbol_data.get("regularMarketChange")
