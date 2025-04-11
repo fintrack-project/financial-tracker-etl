@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import os
 from datetime import datetime, timedelta
 import pytz
+from urllib.parse import quote
 
 # Load environment variables from .env file
 load_dotenv()
@@ -70,7 +71,7 @@ def fetch_market_data(symbols):
         "X-RapidAPI-Key": api_key,
         "X-RapidAPI-Host": "apidojo-yahoo-finance-v1.p.rapidapi.com"
     }
-    params = {"symbols": ",".join(symbols)}
+    params = {"symbols": ",".join([quote(symbol) for symbol in symbols])}
 
     try:
         response = requests.get(api_url, headers=headers, params=params)

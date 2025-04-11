@@ -118,6 +118,14 @@ def run(index_names):
     """
     Main function to fetch, process, and save market data.
     """
+    # Extract the list of asset names if the input is a dictionary
+    if isinstance(index_names, dict) and "index_names" in index_names:
+        index_names = index_names["index_names"]
+
+    if not isinstance(index_names, list):
+        log_message("Error: index_names must be a list of strings.")
+        return
+
     log_message("Starting fetch_market_average_data job...")
 
     # Step 1: Determine the closest US market closing time
