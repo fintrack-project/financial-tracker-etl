@@ -1,14 +1,10 @@
 from datetime import datetime
 from dotenv import load_dotenv
 from etl.utils import get_db_connection, log_message, load_env_variables, fetch_market_data
+from main import publish_kafka_messages, ProducerKafkaTopics
 
 # Load environment variables from .env file
 env_vars = load_env_variables()
-
-# Constants
-SP500_SYMBOL = "^GSPC"
-NASDAQ100_SYMBOL = "^NDX"
-US_MARKET_CLOSE_TIME = "16:00"  # 4:00 PM ET^
 
 def process_market_data(data):
     """
@@ -55,20 +51,40 @@ def save_market_data_to_db(data):
     cursor.close()
     connection.close()
 
-def run():
+def publish_market_average_data_update_complete(data):
+    """
+    Publish a Kafka topic indicating that the market average data update is complete.
+    """
+    log_message(f"Publishing Kafka topic: {ProducerKafkaTopics.MARKET_AVERAGE_DATA_UPDATE_COMPLETE.value}...")
+    message_payload = [
+        {
+            "symbol": record["symbol"],
+            "price": record["price"],
+            "price_change": record["price_change"],
+            "percent_change": record["percent_change"],
+            "price_high": record["price_high"],
+            "price_low": record["price_low"]
+        }
+        for record in data
+    ]
+    publish_kafka_messages(ProducerKafkaTopics.MARKET_AVERAGE_DATA_UPDATE_COMPLETE, message_payload)
+
+def run(index_names):
     print("Running fetch_market_average_data job...")
     """
     Main function to fetch, process, and save market data.
     """
     # Step 1: Fetch market data
-    symbols = [SP500_SYMBOL, NASDAQ100_SYMBOL]
-    raw_data = fetch_market_data(symbols)
+    raw_data = fetch_market_data(index_names)
 
     # Step 2: Process market data
     processed_data = process_market_data(raw_data)
 
     # Step 3: Save data to the database
     save_market_data_to_db(processed_data)
+
+    # Step 4: Publish Kafka topic
+    publish_market_average_data_update_complete(processed_data)
 
     log_message("Market data fetched and saved successfully.")
 
