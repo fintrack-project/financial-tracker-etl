@@ -3,6 +3,8 @@ import os
 from datetime import datetime
 from confluent_kafka import Producer
 from etl.utils import get_db_connection, log_message
+from main import ProducerKafkaTopics
+import json
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 def fetch_transactions():
     """
@@ -77,21 +79,23 @@ def update_holdings(transactions):
         cursor.close()
         connection.close()
 
-def send_process_transactions_message():
+def publish_transactions_processed():
     """
     Send a PROCESS_TRANSACTIONS_TO_HOLDINGS message to notify the HoldingService.
     """
+    log_message(f"Publishing Kafka topic: {ProducerKafkaTopics.PROCESS_TRANSACTIONS_TO_HOLDINGS.value}...")
     producer_config = {
-        'bootstrap.servers': 'kafka:9093'  # Replace with your Kafka broker address
+        'bootstrap.servers': 'kafka:9093',  # Replace with your Kafka broker address
     }
     producer = Producer(producer_config)
 
     try:
-        producer.produce('PROCESS_TRANSACTIONS_TO_HOLDINGS', value='Holdings updated')
+        message = json.dumps({"status": "transactions_processed"})
+        producer.produce(ProducerKafkaTopics.PROCESS_TRANSACTIONS_TO_HOLDINGS.value, key="transactions", value=message)
         producer.flush()
-        log_message("PROCESS_TRANSACTIONS_TO_HOLDINGS message sent successfully.")
+        log_message(f"Published Kafka topic: {ProducerKafkaTopics.PROCESS_TRANSACTIONS_TO_HOLDINGS.value}")
     except Exception as e:
-        log_message(f"Error while sending PROCESS_TRANSACTIONS_TO_HOLDINGS message: {e}")
+        log_message(f"Error publishing Kafka topic: {e}")
         raise
 
 def run():
@@ -101,7 +105,7 @@ def run():
     log_message("Starting process_transactions_to_holdings job...")
     transactions = fetch_transactions()
     update_holdings(transactions)
-    send_process_transactions_message()
+    publish_transactions_processed()
     log_message("process_transactions_to_holdings job completed successfully.")
 
 if __name__ == "__main__":

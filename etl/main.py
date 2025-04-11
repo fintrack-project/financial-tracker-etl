@@ -6,16 +6,24 @@ from confluent_kafka import Consumer, KafkaException, KafkaError
 from enum import Enum
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-class KafkaTopics(Enum):
+class ConsumerKafkaTopics(Enum):
+    """
+    Kafka topics that the ETL system consumes messages from.
+    """
     TRANSACTIONS_CONFIRMED = "TRANSACTIONS_CONFIRMED"
-    PROCESS_TRANSACTIONS_TO_HOLDINGS = "PROCESS_TRANSACTIONS_TO_HOLDINGS"
     ASSET_PRICE_UPDATE_REQUEST = "ASSET_PRICE_UPDATE_REQUEST"
+
+class ProducerKafkaTopics(Enum):
+    """
+    Kafka topics that the ETL system produces messages to.
+    """
     ASSET_PRICE_UPDATE_COMPLETE = "ASSET_PRICE_UPDATE_COMPLETE"
+    PROCESS_TRANSACTIONS_TO_HOLDINGS = "PROCESS_TRANSACTIONS_TO_HOLDINGS"
 
 # Updated TOPIC_TO_JOB_MAP structure
 TOPIC_TO_JOB_MAP = {
-    KafkaTopics.TRANSACTIONS_CONFIRMED.value: {"job_name": "process_transactions_to_holdings", "requires_params": False},
-    KafkaTopics.ASSET_PRICE_UPDATE_REQUEST.value: {"job_name": "update_asset_prices", "requires_params": True}
+    ConsumerKafkaTopics.TRANSACTIONS_CONFIRMED.value: {"job_name": "process_transactions_to_holdings", "requires_params": False},
+    ConsumerKafkaTopics.ASSET_PRICE_UPDATE_REQUEST.value: {"job_name": "update_asset_prices", "requires_params": True}
 }
 
 def run_job(job_name, params=None):
@@ -55,7 +63,7 @@ def consume_kafka_messages():
     }
 
     consumer = Consumer(consumer_config)
-    consumer.subscribe([topic.value for topic in KafkaTopics])  # Add more topics if needed
+    consumer.subscribe([topic.value for topic in ConsumerKafkaTopics])  # Add more topics if needed
 
     print("Kafka consumer started. Listening for messages...")
 

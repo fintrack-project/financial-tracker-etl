@@ -1,5 +1,6 @@
 from etl.utils import get_db_connection, log_message, fetch_market_data
 from confluent_kafka import Producer
+from main import ProducerKafkaTopics
 import json
 from datetime import datetime, timedelta
 import pytz
@@ -135,7 +136,7 @@ def publish_price_update_complete(asset_names):
         log_message("No asset names provided for Kafka topic publication.")
         return
     
-    log_message("Publishing Kafka topic: ASSET_PRICE_UPDATE_COMPLETE...")
+    log_message("Publishing Kafka topic: {ProducerKafkaTopics.ASSET_PRICE_UPDATE_COMPLETE.value}...")
     producer_config = {
         'bootstrap.servers': 'kafka:9093',  # Replace with your Kafka broker address
     }
@@ -143,9 +144,9 @@ def publish_price_update_complete(asset_names):
 
     try:
         message = json.dumps({"assets": asset_names, "status": "complete"})
-        producer.produce("ASSET_PRICE_UPDATE_COMPLETE", key="price_update", value=message)
+        producer.produce(ProducerKafkaTopics.ASSET_PRICE_UPDATE_COMPLETE.value, key="price_update", value=message)
         producer.flush()
-        log_message("Published Kafka topic: ASSET_PRICE_UPDATE_COMPLETE")
+        log_message("Published Kafka topic: {ProducerKafkaTopics.ASSET_PRICE_UPDATE_COMPLETE.value}")
     except Exception as e:
         log_message(f"Error publishing Kafka topic: {e}")
         raise
