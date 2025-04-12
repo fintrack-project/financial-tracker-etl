@@ -19,7 +19,7 @@ def get_existing_market_average_data(index_names, closest_closing_time):
         cursor.execute("""
             WITH latest_data AS (
                 SELECT symbol, price, price_change, percent_change, price_high, price_low, timestamp,
-                       ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) AS row_num
+                    ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) AS row_num
                 FROM market_average_data
                 WHERE symbol = ANY(%s) AND timestamp < %s
             )
@@ -134,11 +134,11 @@ def run(index_names):
 
     log_message("Starting fetch_market_average_data job...")
 
-    # Step 1: Determine the closest US market closing time
+    # Determine the closest US market closing time
     closest_closing_time_utc = get_closest_us_market_closing_time()
     log_message(f"Closest US market closing time in UTC: {closest_closing_time_utc}")
 
-    # Step 2: Check existing data
+    # Check existing data
     existing_data = get_existing_market_average_data(index_names, closest_closing_time_utc)
     log_message(f"There are {len(existing_data)} Existing market average data")
     log_message(f"There are {len(index_names)} index names for market average data")
@@ -147,15 +147,15 @@ def run(index_names):
         publish_market_average_data_update_complete(existing_data)
         return
 
-    # Step 3: Fetch market data and process it if necessary
+    # Fetch market data and process it if necessary
     log_message("Fetching market data from external API...")
     raw_data = fetch_market_data(index_names)
     processed_data = process_market_data(raw_data)
 
-    # Step 4: Save data to the database
+    # Save data to the database
     save_market_data_to_db(processed_data)
 
-    # Step 6: Publish Kafka topic
+    # Publish Kafka topic
     publish_market_average_data_update_complete(processed_data)
 
     log_message("Market data fetched and saved successfully.")

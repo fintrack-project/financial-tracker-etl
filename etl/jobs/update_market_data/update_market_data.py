@@ -137,25 +137,30 @@ def run(asset_names):
         log_message("Error: asset_names must be a list of strings.")
         return
     
-    # Step 1: Validate asset names
+    # Validate asset names
     valid_asset_names = validate_asset_names(asset_names)
     if not valid_asset_names:
         log_message("No valid asset names found. Exiting job.")
         return
     
-    # Step 2: Determine which assets need updates
+    # Determine which assets need updates
     asset_names_needing_update = get_assets_needing_update(valid_asset_names)
     if not asset_names_needing_update:
         log_message("No assets need updates. Exiting job.")
-        return
 
-    # Step 3: Fetch price data
-    asset_prices = fetch_market_data(asset_names_needing_update)
+        # Publish Kafka topic
+        publish_price_update_complete(asset_names, [])
 
-    # Step 4: Update the database
-    update_asset_prices_in_db(asset_prices)
+    else:
+        log_message(f"Assets needing updates: {asset_names_needing_update}")
 
-    # Step 5: Publish Kafka topic
-    publish_price_update_complete(asset_names, asset_names_needing_update)
+        # Fetch price data
+        asset_prices = fetch_market_data(asset_names_needing_update)
+
+        # Update the database
+        update_asset_prices_in_db(asset_prices)
+
+        # Publish Kafka topic
+        publish_price_update_complete(asset_names, asset_names_needing_update)
 
     log_message("update_market_data job completed successfully.")
