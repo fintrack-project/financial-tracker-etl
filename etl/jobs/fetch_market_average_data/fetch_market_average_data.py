@@ -21,12 +21,12 @@ def get_existing_market_average_data(index_names, closest_closing_time):
                 SELECT symbol, price, price_change, percent_change, price_high, price_low, timestamp,
                     ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) AS row_num
                 FROM market_average_data
-                WHERE symbol = ANY(%s) AND timestamp < %s
+                WHERE symbol = ANY(%s) AND timestamp >= %s
             )
             SELECT symbol, price, price_change, percent_change, price_high, price_low, timestamp
             FROM latest_data
             WHERE row_num = 1
-        """, (index_names, closest_closing_time))
+        """, (index_names, closest_closing_time - timedelta(days=1)))
 
         existing_data = cursor.fetchall()
         log_message(f"Found {len(existing_data)} existing market average data records.")
@@ -148,7 +148,6 @@ def run(index_names):
         return
 
     # Fetch market data and process it if necessary
-    log_message("Fetching market data from external API...")
     raw_data = fetch_market_data(index_names)
     processed_data = process_market_data(raw_data)
 
