@@ -60,8 +60,8 @@ def get_assets_needing_update(asset_names):
             SELECT DISTINCT t.asset_name
             FROM transactions t
             LEFT JOIN market_data m ON t.asset_name = m.symbol
-            WHERE t.asset_name = ANY(%s) AND (m.symbol IS NULL OR m.timestamp < %s)
-        """, (asset_names, most_recent_closing_time_utc))
+            WHERE t.asset_name = ANY(%s) AND (m.symbol IS NULL OR NOT (m.timestamp >= %s))
+        """, (asset_names, most_recent_closing_time_utc - timedelta(days=1)))
 
         # Extract asset names from the query result
         assets_needing_update = [row[0] for row in cursor.fetchall()]
