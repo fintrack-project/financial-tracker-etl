@@ -59,8 +59,8 @@ def get_assets_needing_update(asset_names):
             SELECT DISTINCT t.asset_name
             FROM transactions t
             LEFT JOIN market_data m ON t.asset_name = m.symbol
-            WHERE t.asset_name = ANY(%s) AND (m.symbol IS NULL OR NOT (m.timestamp >= %s))
-        """, (asset_names, most_recent_closing_time_utc - timedelta(days=1)))
+            WHERE t.asset_name = ANY(%s) AND (m.symbol IS NULL OR m.updated_at < %s)
+        """, (asset_names, most_recent_closing_time_utc))
 
         # Extract asset names from the query result
         assets_needing_update = [row[0] for row in cursor.fetchall()]
@@ -77,6 +77,7 @@ def get_assets_needing_update(asset_names):
 def update_asset_prices_in_db(asset_prices):
     """
     Update the database with the latest price data for the assets.
+    Perform an upsert operation to ensure only one row per symbol with the most recent data.
     """
     if not asset_prices:
         log_message("No asset prices provided for database update.")
@@ -91,14 +92,18 @@ def update_asset_prices_in_db(asset_prices):
             symbol = symbol_data.get("symbol")
             price = symbol_data.get("regularMarketPrice")
             percent_change = symbol_data.get("regularMarketChangePercent", 0)
-            timestamp = symbol_data.get("regularMarketTime")
-            price_unit = symbol_data.get("currency", "USD")
+            updated_at = symbol_data.get("regularMarketTime")
 
             # Insert or update the market_data table
             cursor.execute("""
-                INSERT INTO market_data (symbol, price, percent_change, timestamp, asset_name, price_unit)
-                VALUES (%s, %s, %s, to_timestamp(%s), %s, %s)
-            """, (symbol, price, percent_change, timestamp, symbol, price_unit))
+                INSERT INTO market_data (symbol, price, percent_change, updated_at)
+                VALUES (%s, %s, %s, to_timestamp(%s))
+                ON CONFLICT (symbol)
+                DO UPDATE SET
+                    price = EXCLUDED.price,
+                    percent_change = EXCLUDED.percent_change,
+                    updated_at = EXCLUDED.updated_at
+            """, (symbol, price, percent_change, updated_at))
 
         connection.commit()
         log_message("Market data updated successfully in the database.")

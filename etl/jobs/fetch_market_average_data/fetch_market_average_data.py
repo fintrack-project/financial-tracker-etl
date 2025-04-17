@@ -7,7 +7,7 @@ from main import publish_kafka_messages, ProducerKafkaTopics
 # Load environment variables from .env file
 env_vars = load_env_variables()
 
-def get_existing_market_average_data(index_names, closest_closing_time):
+def get_existing_market_average_data(symbols, closest_closing_time):
     """
     Check if market average data exists for the closest US market closing time.
     """
@@ -18,18 +18,12 @@ def get_existing_market_average_data(index_names, closest_closing_time):
     try:
         log_message(f"Closest US market closing time: {closest_closing_time}")
         log_message(f"Compare against the previous day: {closest_closing_time - timedelta(days=1)}")
-        log_message(f"Index names to check: {index_names}")
+        log_message(f"Symbols to check: {symbols}")
         cursor.execute("""
-            WITH latest_data AS (
-                SELECT symbol, price, price_change, percent_change, price_high, price_low, timestamp,
-                    ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) AS row_num
-                FROM market_average_data
-                WHERE symbol = ANY(%s) AND timestamp >= %s
-            )
-            SELECT symbol, price, price_change, percent_change, price_high, price_low, timestamp
-            FROM latest_data
-            WHERE row_num = 1
-        """, (index_names, closest_closing_time - timedelta(days=1)))
+            SELECT symbol, price, price_change, percent_change, price_high, price_low, updated_at
+            FROM market_average_data
+            WHERE symbol = ANY(%s) AND updated_at >= %s
+        """, (symbols, closest_closing_time - timedelta(days=1)))
 
         existing_data = cursor.fetchall()
         log_message(f"Found {len(existing_data)} existing market average data records.")
@@ -42,7 +36,7 @@ def get_existing_market_average_data(index_names, closest_closing_time):
                 "percent_change": row[3],
                 "price_high": row[4],
                 "price_low": row[5],
-                "timestamp": row[6]
+                "updated_at": row[6]
             }
             for row in existing_data
         ]
@@ -84,8 +78,16 @@ def save_market_data_to_db(data):
     try:
         for record in data:
             cursor.execute("""
-                INSERT INTO market_average_data (symbol, price, price_change, percent_change, price_high, price_low, timestamp)
+                INSERT INTO market_average_data (symbol, price, price_change, percent_change, price_high, price_low, updated_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (symbol)
+                DO UPDATE SET
+                    price = EXCLUDED.price,
+                    price_change = EXCLUDED.price_change,
+                    percent_change = EXCLUDED.percent_change,
+                    price_high = EXCLUDED.price_high,
+                    price_low = EXCLUDED.price_low,
+                    updated_at = EXCLUDED.updated_at
             """, (
                 record['symbol'],
                 record['price'],
@@ -123,18 +125,18 @@ def publish_market_average_data_update_complete(data):
     ]
     publish_kafka_messages(ProducerKafkaTopics.MARKET_AVERAGE_DATA_UPDATE_COMPLETE, message_payload)
 
-def run(index_names):
+def run(symbols):
     print("Running fetch_market_average_data job...")
     """
     Main function to fetch, process, and save market data.
     """
 
-    # Extract the list of asset names if the input is a dictionary
-    if isinstance(index_names, dict) and "index_names" in index_names:
-        index_names = index_names["index_names"]
+    # Extract the list of symbols if the input is a dictionary
+    if isinstance(symbols, dict) and "symbols" in symbols:
+        symbols = symbols["symbolss"]
 
-    if not isinstance(index_names, list):
-        log_message("Error: index_names must be a list of strings.")
+    if not isinstance(symbols, list):
+        log_message("Error: symbols must be a list of strings.")
         return
 
     log_message("Starting fetch_market_average_data job...")
@@ -144,10 +146,8 @@ def run(index_names):
     log_message(f"Closest US market closing time in UTC: {closest_closing_time_utc}")
 
     # Check existing data
-    existing_data = get_existing_market_average_data(index_names, closest_closing_time_utc)
-    log_message(f"There are {len(existing_data)} Existing market average data")
-    log_message(f"There are {len(index_names)} index names for market average data")
-    if len(existing_data) == len(index_names):
+    existing_data = get_existing_market_average_data(symbols, closest_closing_time_utc)
+    if len(existing_data) == len(symbols):
         log_message("All market average data is up-to-date. Using existing data.")
         publish_market_average_data_update_complete(existing_data)
 
@@ -155,7 +155,7 @@ def run(index_names):
         log_message("Market average data is not up-to-date. Quoting new data...")
 
         # Quote market data and process it if necessary
-        raw_data = quote_market_data(index_names)
+        raw_data = quote_market_data(symbols)
         processed_data = process_market_data(raw_data)
 
         # Save data to the database
