@@ -56,11 +56,11 @@ def load_env_variables(env_file=".env"):
         raise FileNotFoundError(f"{env_file} file not found.")
     return env_vars
 
-def fetch_market_data(symbols):
+def quote_market_data(symbols):
     """
-    Fetch market data for the given symbols from Yahoo Finance via RapidAPI.
+    Quote market data for the given symbols from Yahoo Finance via RapidAPI.
     """
-    log_message("Fetching market data from external API...")
+    log_message("Quoting market data from external API...")
     api_url = os.getenv("RAPIDAPI_URL")
     api_key = os.getenv("RAPIDAPI_KEY")
 
@@ -86,7 +86,7 @@ def fetch_market_data(symbols):
         return data["quoteResponse"]["result"]
 
     except requests.exceptions.RequestException as e:
-        log_message(f"Error fetching market data: {e}")
+        log_message(f"Error quoting market data: {e}")
         raise
 
 def get_closest_us_market_closing_time():

@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 import pytz
 from dotenv import load_dotenv
-from etl.utils import get_db_connection, log_message, load_env_variables, fetch_market_data, get_closest_us_market_closing_time
+from etl.utils import get_db_connection, log_message, load_env_variables, quote_market_data, get_closest_us_market_closing_time
 from main import publish_kafka_messages, ProducerKafkaTopics
 
 # Load environment variables from .env file
@@ -152,10 +152,10 @@ def run(index_names):
         publish_market_average_data_update_complete(existing_data)
 
     else:
-        log_message("Market average data is not up-to-date. Fetching new data...")
+        log_message("Market average data is not up-to-date. Quoting new data...")
 
-        # Fetch market data and process it if necessary
-        raw_data = fetch_market_data(index_names)
+        # Quote market data and process it if necessary
+        raw_data = quote_market_data(index_names)
         processed_data = process_market_data(raw_data)
 
         # Save data to the database
@@ -163,7 +163,7 @@ def run(index_names):
 
         # Publish Kafka topic
         publish_market_average_data_update_complete(processed_data)
-        log_message("Market data fetched and saved successfully.")
+        log_message("Market data quoted and saved successfully.")
 
 if __name__ == "__main__":
     run()

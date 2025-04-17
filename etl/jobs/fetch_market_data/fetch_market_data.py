@@ -1,8 +1,7 @@
-from etl.utils import get_db_connection, log_message, fetch_market_data, get_closest_us_market_closing_time
+from etl.utils import get_db_connection, log_message, quote_market_data, get_closest_us_market_closing_time
 from confluent_kafka import Producer
 from main import publish_kafka_messages, ProducerKafkaTopics
-from datetime import datetime, timedelta
-import pytz
+from datetime import timedelta
 
 def validate_asset_names(asset_names):
     """
@@ -154,8 +153,8 @@ def run(asset_names):
     else:
         log_message(f"Assets needing updates: {asset_names_needing_update}")
 
-        # Fetch price data
-        asset_prices = fetch_market_data(asset_names_needing_update)
+        # Quote price data
+        asset_prices = quote_market_data(asset_names_needing_update)
 
         # Update the database
         update_asset_prices_in_db(asset_prices)

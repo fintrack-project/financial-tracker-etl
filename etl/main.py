@@ -27,7 +27,7 @@ class ProducerKafkaTopics(Enum):
 # Updated TOPIC_TO_JOB_MAP structure
 TOPIC_TO_JOB_MAP = {
     ConsumerKafkaTopics.TRANSACTIONS_CONFIRMED.value: {"job_name": "process_transactions_to_holdings", "requires_params": False},
-    ConsumerKafkaTopics.MARKET_DATA_UPDATE_REQUEST.value: {"job_name": "update_market_data", "requires_params": True},
+    ConsumerKafkaTopics.MARKET_DATA_UPDATE_REQUEST.value: {"job_name": "fetch_market_data", "requires_params": True},
     ConsumerKafkaTopics.MARKET_AVERAGE_DATA_UPDATE_REQUEST.value: {"job_name": "fetch_market_average_data", "requires_params": True}
 }
 
