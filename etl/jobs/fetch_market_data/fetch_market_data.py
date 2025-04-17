@@ -18,7 +18,7 @@ def validate_asset_names(asset_names):
             SELECT DISTINCT asset_name
             FROM holdings
             WHERE asset_name = ANY(%s)
-        """, (asset_names,))
+        """.strip(), (asset_names,))
 
         # Extract valid asset names from the query result
         valid_asset_names = [row[0] for row in cursor.fetchall()]
