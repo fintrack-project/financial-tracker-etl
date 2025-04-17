@@ -32,13 +32,18 @@ def aggregate_transactions():
 def update_holdings(transactions):
     """
     Update the holdings table with the total balance for each account's asset_name.
+    Remove any asset_name from holdings that no longer exists in transactions.
     """
     connection = get_db_connection()
     cursor = connection.cursor()
 
     try:
+        # Step 1: Update or insert holdings based on transactions
+        processed_asset_names = set()
         for transaction in transactions:
             account_id, asset_name, symbol, unit, total_balance = transaction
+
+            log_message(f"Updating holdings for account_id: {account_id}, asset_name: {asset_name}, symbol: {symbol}, total_balance: {total_balance}, unit: {unit}")
 
             # Update the holdings table
             cursor.execute("""
@@ -51,9 +56,23 @@ def update_holdings(transactions):
                     updated_at = EXCLUDED.updated_at
             """, (account_id, asset_name, symbol, total_balance, unit))
 
+            # Track processed asset_names for this account
+            processed_asset_names.add((account_id, asset_name))
+
+        # Step 2: Remove orphaned records from holdings
+        log_message("Removing orphaned records from holdings...")
+        cursor.execute("""
+            DELETE FROM holdings
+            WHERE (account_id, asset_name) NOT IN (
+                SELECT account_id, asset_name
+                FROM transactions
+                GROUP BY account_id, asset_name
+            )
+        """)
+
         # Commit the changes to the database
         connection.commit()
-        log_message("Holdings table updated successfully.")
+        log_message("Holdings table updated successfully, including removal of orphaned records.")
 
     except Exception as e:
         log_message(f"Error while updating holdings: {e}")
@@ -77,6 +96,9 @@ def run():
     """
     log_message("Starting process_transactions_to_holdings job...")
     aggregated_transactions = aggregate_transactions()
+
+    log_message(f"Aggregated transactions: {aggregated_transactions}")
+
     update_holdings(aggregated_transactions)
     publish_transactions_processed()
     log_message("process_transactions_to_holdings job completed successfully.")
