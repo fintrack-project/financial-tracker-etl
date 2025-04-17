@@ -27,7 +27,7 @@ class ProducerKafkaTopics(Enum):
 # Updated TOPIC_TO_JOB_MAP structure
 TOPIC_TO_JOB_MAP = {
     ConsumerKafkaTopics.TRANSACTIONS_CONFIRMED.value: {"job_name": "process_transactions_to_holdings", "requires_params": False},
-    ConsumerKafkaTopics.MARKET_DATA_UPDATE_REQUEST.value: {"job_name": "update_market_data", "requires_params": True},
+    ConsumerKafkaTopics.MARKET_DATA_UPDATE_REQUEST.value: {"job_name": "fetch_market_data", "requires_params": True},
     ConsumerKafkaTopics.MARKET_AVERAGE_DATA_UPDATE_REQUEST.value: {"job_name": "fetch_market_average_data", "requires_params": True}
 }
 
@@ -37,7 +37,6 @@ def run_job(job_name, params=None):
     If params are provided, pass them to the job's run() function.
     """
     try:
-        print(f"Python module search path: {sys.path}")
         print(f"Attempting to import: etl.jobs.{job_name}")
         job_module = importlib.import_module(f"etl.jobs.{job_name}")
         print(f"Successfully imported: etl.jobs.{job_name}")

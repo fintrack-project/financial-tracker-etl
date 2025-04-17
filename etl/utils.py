@@ -27,17 +27,18 @@ def get_db_connection(db_config=None):
     return psycopg2.connect(**db_config)
 
 def log_message(message):
-    """
-    Log a message to the etl.log file.
-    """
+    log_dir = "logs"
+    log_file = os.path.join(log_dir, "etl.log")
+
+    # Ensure the logs directory exists
+    os.makedirs(log_dir, exist_ok=True)
+
     logging.basicConfig(
-        filename="logs/etl.log",
+        filename=log_file,
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s"
     )
     logging.info(message)
-
-import os
 
 def load_env_variables(env_file=".env"):
     """
@@ -56,11 +57,11 @@ def load_env_variables(env_file=".env"):
         raise FileNotFoundError(f"{env_file} file not found.")
     return env_vars
 
-def fetch_market_data(symbols):
+def quote_market_data(symbols):
     """
-    Fetch market data for the given symbols from Yahoo Finance via RapidAPI.
+    Quote market data for the given symbols from Yahoo Finance via RapidAPI.
     """
-    log_message("Fetching market data from external API...")
+    log_message("Quoting market data from external API...")
     api_url = os.getenv("RAPIDAPI_URL")
     api_key = os.getenv("RAPIDAPI_KEY")
 
@@ -86,7 +87,7 @@ def fetch_market_data(symbols):
         return data["quoteResponse"]["result"]
 
     except requests.exceptions.RequestException as e:
-        log_message(f"Error fetching market data: {e}")
+        log_message(f"Error quoting market data: {e}")
         raise
 
 def get_closest_us_market_closing_time():
