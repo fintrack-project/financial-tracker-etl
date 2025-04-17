@@ -19,11 +19,11 @@ class TestFetchMarketAverageData(unittest.TestCase):
         ]
 
         # Call the run function
-        run({"index_names": ["^GSPC", "^NDX"]})
+        run({"symbols": ["^GSPC", "^NDX"]})  # Updated to use "symbols"
 
         # Assertions
-        mock_get_existing.assert_called_once()
-        mock_publish.assert_called_once()
+        mock_get_existing.assert_called_once_with(["^GSPC", "^NDX"], mock_closing_time.return_value)
+        mock_publish.assert_called_once_with(mock_get_existing.return_value)
 
 if __name__ == "__main__":
     unittest.main()

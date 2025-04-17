@@ -133,7 +133,7 @@ def run(symbols):
 
     # Extract the list of symbols if the input is a dictionary
     if isinstance(symbols, dict) and "symbols" in symbols:
-        symbols = symbols["symbolss"]
+        symbols = symbols["symbols"]
 
     if not isinstance(symbols, list):
         log_message("Error: symbols must be a list of strings.")
