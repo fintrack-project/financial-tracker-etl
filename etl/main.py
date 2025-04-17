@@ -37,7 +37,6 @@ def run_job(job_name, params=None):
     If params are provided, pass them to the job's run() function.
     """
     try:
-        print(f"Python module search path: {sys.path}")
         print(f"Attempting to import: etl.jobs.{job_name}")
         job_module = importlib.import_module(f"etl.jobs.{job_name}")
         print(f"Successfully imported: etl.jobs.{job_name}")

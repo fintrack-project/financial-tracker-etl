@@ -16,6 +16,9 @@ def get_existing_market_average_data(index_names, closest_closing_time):
     cursor = connection.cursor()
 
     try:
+        log_message(f"Closest US market closing time: {closest_closing_time}")
+        log_message(f"Compare against the previous day: {closest_closing_time - timedelta(days=1)}")
+        log_message(f"Index names to check: {index_names}")
         cursor.execute("""
             WITH latest_data AS (
                 SELECT symbol, price, price_change, percent_change, price_high, price_low, timestamp,
@@ -30,6 +33,7 @@ def get_existing_market_average_data(index_names, closest_closing_time):
 
         existing_data = cursor.fetchall()
         log_message(f"Found {len(existing_data)} existing market average data records.")
+        log_message(f"Existing market average data: {existing_data}")
         return [
             {
                 "symbol": row[0],
@@ -124,6 +128,7 @@ def run(index_names):
     """
     Main function to fetch, process, and save market data.
     """
+
     # Extract the list of asset names if the input is a dictionary
     if isinstance(index_names, dict) and "index_names" in index_names:
         index_names = index_names["index_names"]
@@ -145,19 +150,20 @@ def run(index_names):
     if len(existing_data) == len(index_names):
         log_message("All market average data is up-to-date. Using existing data.")
         publish_market_average_data_update_complete(existing_data)
-        return
 
-    # Fetch market data and process it if necessary
-    raw_data = fetch_market_data(index_names)
-    processed_data = process_market_data(raw_data)
+    else:
+        log_message("Market average data is not up-to-date. Fetching new data...")
 
-    # Save data to the database
-    save_market_data_to_db(processed_data)
+        # Fetch market data and process it if necessary
+        raw_data = fetch_market_data(index_names)
+        processed_data = process_market_data(raw_data)
 
-    # Publish Kafka topic
-    publish_market_average_data_update_complete(processed_data)
+        # Save data to the database
+        save_market_data_to_db(processed_data)
 
-    log_message("Market data fetched and saved successfully.")
+        # Publish Kafka topic
+        publish_market_average_data_update_complete(processed_data)
+        log_message("Market data fetched and saved successfully.")
 
 if __name__ == "__main__":
     run()
