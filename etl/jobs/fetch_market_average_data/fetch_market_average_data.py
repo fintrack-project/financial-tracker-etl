@@ -125,15 +125,21 @@ def publish_market_average_data_update_complete(data):
     ]
     publish_kafka_messages(ProducerKafkaTopics.MARKET_AVERAGE_DATA_UPDATE_COMPLETE, message_payload)
 
-def run(symbols):
-    print("Running fetch_market_average_data job...")
+def run(message_content):
     """
     Main function to fetch, process, and save market data.
     """
+    log_message("Running fetch_market_average_data job...")
+    log_message(f"Received message content: {message_content}")
 
-    # Extract the list of symbols if the input is a dictionary
-    if isinstance(symbols, dict) and "symbols" in symbols:
-        symbols = symbols["symbols"]
+    # Extract the list of symbols from message_content
+    if isinstance(message_content, dict) and "symbols" in message_content:
+        symbols = message_content["symbols"]
+    else:
+        log_message("Error: message_content must be a dictionary with a 'symbols' key.")
+        return
+    
+    log_message(f"Received symbols: {symbols}")
 
     if not isinstance(symbols, list):
         log_message("Error: symbols must be a list of strings.")

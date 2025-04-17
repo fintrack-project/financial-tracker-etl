@@ -127,15 +127,21 @@ def publish_price_update_complete(asset_names, asset_names_needing_update):
     params = {"assets": asset_names, "updatedAssets": asset_names_needing_update, "status": "complete"}
     publish_kafka_messages(ProducerKafkaTopics.ASSET_PRICE_UPDATE_COMPLETE, params)
 
-def run(symbols):
+def run(message_content):
     """
     Main function to fetch and update asset prices.
     """
     log_message("Starting update_market_data job...")
-
-    # Extract the list of symbols if the input is a dictionary
-    if isinstance(symbols, dict) and "symbols" in symbols:
-        symbols = symbols["symbols"]
+    log_message(f"Received message content: {message_content}")
+    
+    # Extract the list of symbols from message_content
+    if isinstance(message_content, dict) and "symbols" in message_content:
+        symbols = message_content["symbols"]
+    else:
+        log_message("Error: message_content must be a dictionary with a 'symbols' key.")
+        return
+    
+    log_message(f"Received symbols: {symbols}")
 
     if not isinstance(symbols, list):
         log_message("Error: symbols must be a list of strings.")
