@@ -6,22 +6,24 @@ from etl.utils import get_db_connection, log_message
 from main import publish_kafka_messages, ProducerKafkaTopics
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-def fetch_transactions():
+
+def aggregate_transactions():
     """
-    Fetch all transactions ordered by account_id, asset_name, and date.
+    Aggregate transactions by account_id and asset_name to calculate total balances.
     """
     connection = get_db_connection()
     cursor = connection.cursor()
     try:
         cursor.execute("""
-            SELECT account_id, date, asset_name, credit, debit, unit
+            SELECT account_id, asset_name, symbol, unit, 
+                SUM(credit) - SUM(debit) AS total_balance
             FROM transactions
-            ORDER BY account_id, asset_name, date
+            GROUP BY account_id, asset_name, symbol, unit
         """)
         transactions = cursor.fetchall()
         return transactions
     except Exception as e:
-        log_message(f"Error while fetching transactions: {e}")
+        log_message(f"Error while aggregating transactions: {e}")
         raise
     finally:
         cursor.close()
@@ -29,43 +31,25 @@ def fetch_transactions():
 
 def update_holdings(transactions):
     """
-    Calculate total holdings by asset (asset_name) and update the holdings table.
+    Update the holdings table with the total balance for each account's asset_name.
     """
     connection = get_db_connection()
     cursor = connection.cursor()
 
     try:
-        # Initialize a dictionary to track holdings and the most recent date
-        holdings = {}
-        most_recent_dates = {}
-
-        # Process transactions to calculate holdings
         for transaction in transactions:
-            account_id, date, asset_name, credit, debit, unit = transaction
+            account_id, asset_name, symbol, unit, total_balance = transaction
 
-            # Initialize holdings for this account_id and asset_name if not already present
-            if (account_id, asset_name) not in most_recent_dates:
-                most_recent_dates[(account_id, asset_name)] = date
-                holdings[(account_id, date, asset_name)] = 0  # Start with 0 balance
-
-            # Calculate the net change for this transaction
-            net_change = (credit or 0) - (debit or 0)
-
-            # Update the holdings balance
-            most_recent_date = most_recent_dates[(account_id, asset_name)]
-            holdings[(account_id, date, asset_name)] = holdings[(account_id, most_recent_date, asset_name)] + net_change
-
-            if date > most_recent_dates[(account_id, asset_name)]:
-                most_recent_dates[(account_id, asset_name)] = date
-
-            # Update the holdings table for this transaction date
+            # Update the holdings table
             cursor.execute("""
-                INSERT INTO holdings (account_id, date, asset_name, total_balance, unit)
-                VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (account_id, date, asset_name) DO UPDATE
+                INSERT INTO holdings (account_id, asset_name, symbol, total_balance, unit, updated_at)
+                VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (account_id, asset_name) DO UPDATE
                 SET total_balance = EXCLUDED.total_balance,
-                    unit = EXCLUDED.unit
-            """, (account_id, date, asset_name, holdings[(account_id, date, asset_name)], unit))
+                    unit = EXCLUDED.unit,
+                    symbol = EXCLUDED.symbol,
+                    updated_at = EXCLUDED.updated_at
+            """, (account_id, asset_name, symbol, total_balance, unit))
 
         # Commit the changes to the database
         connection.commit()
@@ -92,8 +76,8 @@ def run():
     Main function to calculate and update holdings.
     """
     log_message("Starting process_transactions_to_holdings job...")
-    transactions = fetch_transactions()
-    update_holdings(transactions)
+    aggregated_transactions = aggregate_transactions()
+    update_holdings(aggregated_transactions)
     publish_transactions_processed()
     log_message("process_transactions_to_holdings job completed successfully.")
 
