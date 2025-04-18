@@ -31,6 +31,38 @@ def aggregate_transactions(account_id, transaction_ids):
         cursor.close()
         connection.close()
 
+def insert_or_update_holding(cursor, account_id, asset_name, symbol, unit, total_balance):
+    """
+    Insert or update a holding record in the holdings table.
+    """
+    log_message(f"Updating holdings for account_id: {account_id}, asset_name: {asset_name}, symbol: {symbol}, total_balance: {total_balance}, unit: {unit}")
+    cursor.execute("""
+        INSERT INTO holdings (account_id, asset_name, symbol, total_balance, unit, updated_at)
+        VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+        ON CONFLICT (account_id, asset_name) DO UPDATE
+        SET total_balance = EXCLUDED.total_balance,
+            unit = EXCLUDED.unit,
+            symbol = EXCLUDED.symbol,
+            updated_at = EXCLUDED.updated_at
+    """, (account_id, asset_name, symbol, total_balance, unit))
+
+
+def remove_orphaned_holdings(cursor, account_id):
+    """
+    Remove orphaned records from the holdings table for the given account_id.
+    """
+    log_message("Removing orphaned records from holdings...")
+    cursor.execute("""
+        DELETE FROM holdings
+        WHERE account_id = %s AND (account_id, asset_name) NOT IN (
+            SELECT account_id, asset_name
+            FROM transactions
+            WHERE account_id = %s AND deleted_at IS NULL
+            GROUP BY account_id, asset_name
+        )
+    """, (account_id, account_id))
+    log_message("Orphaned records removed successfully.")
+
 def update_holdings(account_id, aggregated_transactions):
     """
     Update the holdings table with the total balance for each account's asset_name.
@@ -41,37 +73,12 @@ def update_holdings(account_id, aggregated_transactions):
 
     try:
         # Step 1: Update or insert holdings based on aggregated transactions
-        processed_asset_names = set()
         for transaction in aggregated_transactions:
             account_id, asset_name, symbol, unit, total_balance = transaction
-
-            log_message(f"Updating holdings for account_id: {account_id}, asset_name: {asset_name}, symbol: {symbol}, total_balance: {total_balance}, unit: {unit}")
-
-            # Update the holdings table
-            cursor.execute("""
-                INSERT INTO holdings (account_id, asset_name, symbol, total_balance, unit, updated_at)
-                VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                ON CONFLICT (account_id, asset_name) DO UPDATE
-                SET total_balance = EXCLUDED.total_balance,
-                    unit = EXCLUDED.unit,
-                    symbol = EXCLUDED.symbol,
-                    updated_at = EXCLUDED.updated_at
-            """, (account_id, asset_name, symbol, total_balance, unit))
-
-            # Track processed asset_names for this account
-            processed_asset_names.add((account_id, asset_name))
+            insert_or_update_holding(cursor, account_id, asset_name, symbol, unit, total_balance)
 
         # Step 2: Remove orphaned records from holdings
-        log_message("Removing orphaned records from holdings...")
-        cursor.execute("""
-            DELETE FROM holdings
-            WHERE account_id = %s AND (account_id, asset_name) NOT IN (
-                SELECT account_id, asset_name
-                FROM transactions
-                WHERE account_id = %s AND deleted_at IS NULL
-                GROUP BY account_id, asset_name
-            )
-        """, (account_id, account_id))
+        remove_orphaned_holdings(cursor, account_id)
 
         # Commit the changes to the database
         connection.commit()
