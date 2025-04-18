@@ -91,7 +91,7 @@ def publish_transactions_processed():
     """
     # Use the centralized publish_kafka_messages method
     params = {"status": "transactions_processed"}
-    publish_kafka_messages(ProducerKafkaTopics.PROCESS_TRANSACTIONS_TO_HOLDINGS, params)
+    publish_kafka_messages(ProducerKafkaTopics.PROCESS_TRANSACTIONS_TO_HOLDINGS_COMPLETE, params)
 
 def run(message_payload):
     """
