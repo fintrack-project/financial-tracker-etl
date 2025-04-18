@@ -62,30 +62,25 @@ def remove_orphaned_monthly_holdings(account_id, assets):
     """
     Remove orphaned monthly holdings for assets that no longer have any transactions.
     """
+    if not assets:
+        log_message(f"No assets to process for account_id: {account_id}")
+        return
+
     connection = get_db_connection()
     cursor = connection.cursor()
 
-    log_message(f"Removing orphaned monthly holdings for account_id: {account_id} and assets: {assets}")
-
     try:
-        for asset_name in assets:
-            # Check if the asset still has any transactions
-            cursor.execute("""
-                SELECT COUNT(*)
+        # Remove orphaned holdings in a single query
+        cursor.execute("""
+            DELETE FROM holdings_monthly
+            WHERE account_id = %s AND asset_name = ANY(%s)
+            AND NOT EXISTS (
+                SELECT 1
                 FROM transactions
-                WHERE account_id = %s AND asset_name = %s AND deleted_at IS NULL
-            """, (account_id, asset_name))
-            transaction_count = cursor.fetchone()[0]
-
-            log_message(f"Transaction count for account_id: {account_id}, asset_name: {asset_name} is {transaction_count}")
-
-            if transaction_count == 0:
-                # Remove orphaned monthly holdings
-                cursor.execute("""
-                    DELETE FROM monthly_holdings
-                    WHERE account_id = %s AND asset_name = %s
-                """, (account_id, asset_name))
-                log_message(f"Removed orphaned monthly holdings for account_id: {account_id}, asset_name: {asset_name}")
+                WHERE account_id = %s AND asset_name = holdings_monthly.asset_name AND deleted_at IS NULL
+            )
+        """, (account_id, assets, account_id))
+        log_message(f"Removed orphaned monthly holdings for account_id: {account_id}, assets: {assets}")
 
         connection.commit()
     except Exception as e:
@@ -178,7 +173,7 @@ def run(message_payload=None):
 
         # Retrieve assets for added and deleted transactions
         added_assets = get_assets_by_transaction_ids(transactions_added)
-        deleted_assets = get_assets_by_transaction_ids(transactions_deleted)
+        deleted_assets = get_assets_by_transaction_ids(transactions_deleted, True)
 
         log_message(f"Transactions added: {transactions_added}, Transactions deleted: {transactions_deleted}")
         log_message(f"Processing account_id: {account_id} with added assets: {added_assets}, deleted assets: {deleted_assets}")
