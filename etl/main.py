@@ -14,6 +14,7 @@ class ConsumerKafkaTopics(Enum):
     TRANSACTIONS_CONFIRMED = "TRANSACTIONS_CONFIRMED"
     MARKET_DATA_UPDATE_REQUEST = "MARKET_DATA_UPDATE_REQUEST"
     MARKET_AVERAGE_DATA_UPDATE_REQUEST = "MARKET_AVERAGE_DATA_UPDATE_REQUEST"
+    HOLDINGS_MONTHLY_REQUEST = "HOLDINGS_MONTHLY_REQUEST"
 
 class ProducerKafkaTopics(Enum):
     """
@@ -21,14 +22,33 @@ class ProducerKafkaTopics(Enum):
     """
     MARKET_DATA_UPDATE_COMPLETE = "MARKET_DATA_UPDATE_COMPLETE"
     MARKET_AVERAGE_DATA_UPDATE_COMPLETE = "MARKET_AVERAGE_DATA_UPDATE_COMPLETE"
-    PROCESS_TRANSACTIONS_TO_HOLDINGS = "PROCESS_TRANSACTIONS_TO_HOLDINGS"
+    PROCESS_TRANSACTIONS_TO_HOLDINGS_COMPLETE = "PROCESS_TRANSACTIONS_TO_HOLDINGS_COMPLETE"
+    PROCESS_TRANSACTIONS_TO_HOLDINGS_MONTHLY_COMPLETE = "PROCESS_TRANSACTIONS_TO_HOLDINGS_MONTHLY_COMPLETE"
 
 
 # Updated TOPIC_TO_JOB_MAP structure
 TOPIC_TO_JOB_MAP = {
-    ConsumerKafkaTopics.TRANSACTIONS_CONFIRMED.value: {"job_name": "process_transactions_to_holdings", "requires_params": False},
-    ConsumerKafkaTopics.MARKET_DATA_UPDATE_REQUEST.value: {"job_name": "fetch_market_data", "requires_params": True},
-    ConsumerKafkaTopics.MARKET_AVERAGE_DATA_UPDATE_REQUEST.value: {"job_name": "fetch_market_average_data", "requires_params": True}
+    ConsumerKafkaTopics.TRANSACTIONS_CONFIRMED.value: {
+        "jobs": [
+            {"job_name": "process_transactions_to_holdings", "requires_params": True},
+            {"job_name": "process_transactions_to_holdings_monthly", "requires_params": True}
+        ]
+    },
+    ConsumerKafkaTopics.MARKET_DATA_UPDATE_REQUEST.value: {
+        "jobs": [
+            {"job_name": "fetch_market_data", "requires_params": True}
+        ]
+    },
+    ConsumerKafkaTopics.MARKET_AVERAGE_DATA_UPDATE_REQUEST.value: {
+        "jobs": [
+            {"job_name": "fetch_market_average_data", "requires_params": True}
+        ]
+    },
+    ConsumerKafkaTopics.HOLDINGS_MONTHLY_REQUEST.value: {
+        "jobs": [
+            {"job_name": "process_transactions_to_holdings_monthly", "requires_params": False}
+        ]
+    }
 }
 
 def run_job(job_name, params=None):
@@ -97,24 +117,25 @@ def consume_kafka_messages():
                 print(f"Warning: Received empty message on topic '{topic}'. Skipping processing.")
                 continue
 
-            # Trigger the appropriate job based on the topic
+            # Trigger the appropriate jobs based on the topic
             if topic in TOPIC_TO_JOB_MAP:
-                job_config = TOPIC_TO_JOB_MAP[topic]
-                job_name = job_config["job_name"]
-                requires_params = job_config["requires_params"]
+                job_configs = TOPIC_TO_JOB_MAP[topic]["jobs"]
 
-                print(f"Triggering job: {job_name}")
+                for job_config in job_configs:
+                    job_name = job_config["job_name"]
+                    requires_params = job_config["requires_params"]
 
-                if requires_params:
-                    try:
-                        # Parse the message content as JSON
-                        message_content = json.loads(value)
-                        run_job(job_name, message_content)
-                    except json.JSONDecodeError:
-                        print(f"Error: Failed to decode JSON message on topic '{topic}'. Skipping job '{job_name}'.")
-                        continue
-                else:
-                    run_job(job_name)
+                    print(f"Triggering job: {job_name}")
+
+                    if requires_params:
+                        try:
+                            message_payload = json.loads(value)
+                            run_job(job_name, message_payload)
+                        except json.JSONDecodeError:
+                            print(f"Error: Failed to decode JSON message on topic '{topic}'. Skipping job '{job_name}'.")
+                            continue
+                    else:
+                        run_job(job_name)
             else:
                 print(f"Unknown topic: {topic}")
 
