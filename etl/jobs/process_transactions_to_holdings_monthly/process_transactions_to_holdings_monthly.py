@@ -3,18 +3,32 @@ from dateutil.relativedelta import relativedelta
 from etl.utils import get_db_connection, log_message
 from main import publish_kafka_messages, ProducerKafkaTopics
 
-def get_assets_by_transaction_ids(transaction_ids):
+def get_assets_by_transaction_ids(transaction_ids, deleted=False):
     """
     Retrieve asset names associated with the given transaction IDs.
+    
+    Parameters:
+        transaction_ids (list): List of transaction IDs to filter.
+        deleted (bool): If True, fetch deleted transactions. If False, fetch non-deleted transactions.
     """
     connection = get_db_connection()
     cursor = connection.cursor()
     try:
-        cursor.execute("""
-            SELECT DISTINCT asset_name
-            FROM transactions
-            WHERE transaction_id = ANY(%s) AND deleted_at IS NULL
-        """, (transaction_ids,))
+        if deleted:
+            # Fetch deleted transactions
+            cursor.execute("""
+                SELECT DISTINCT asset_name
+                FROM transactions
+                WHERE transaction_id = ANY(%s) AND deleted_at IS NOT NULL
+            """, (transaction_ids,))
+        else:
+            # Fetch non-deleted transactions
+            cursor.execute("""
+                SELECT DISTINCT asset_name
+                FROM transactions
+                WHERE transaction_id = ANY(%s) AND deleted_at IS NULL
+            """, (transaction_ids,))
+        
         return [row[0] for row in cursor.fetchall()]
     finally:
         cursor.close()
@@ -51,6 +65,8 @@ def remove_orphaned_monthly_holdings(account_id, assets):
     connection = get_db_connection()
     cursor = connection.cursor()
 
+    log_message(f"Removing orphaned monthly holdings for account_id: {account_id} and assets: {assets}")
+
     try:
         for asset_name in assets:
             # Check if the asset still has any transactions
@@ -60,6 +76,8 @@ def remove_orphaned_monthly_holdings(account_id, assets):
                 WHERE account_id = %s AND asset_name = %s AND deleted_at IS NULL
             """, (account_id, asset_name))
             transaction_count = cursor.fetchone()[0]
+
+            log_message(f"Transaction count for account_id: {account_id}, asset_name: {asset_name} is {transaction_count}")
 
             if transaction_count == 0:
                 # Remove orphaned monthly holdings
@@ -161,6 +179,9 @@ def run(message_payload=None):
         # Retrieve assets for added and deleted transactions
         added_assets = get_assets_by_transaction_ids(transactions_added)
         deleted_assets = get_assets_by_transaction_ids(transactions_deleted)
+
+        log_message(f"Transactions added: {transactions_added}, Transactions deleted: {transactions_deleted}")
+        log_message(f"Processing account_id: {account_id} with added assets: {added_assets}, deleted assets: {deleted_assets}")
 
         # Determine the start_date as the oldest date from transactions_added or transactions_deleted
         connection = get_db_connection()
