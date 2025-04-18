@@ -1,19 +1,37 @@
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from etl.utils import get_db_connection, log_message
+from main import publish_kafka_messages, ProducerKafkaTopics
 
-def get_oldest_transaction_date(account_id, symbol):
+def get_all_accounts_and_symbols():
+    """
+    Retrieve all account IDs and their associated symbols from the transactions table.
+    """
+    connection = get_db_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute("""
+            SELECT DISTINCT account_id, symbol
+            FROM transactions
+        """)
+        return cursor.fetchall()
+    finally:
+        cursor.close()
+        connection.close()
+
+def get_oldest_transaction_date(account_id, symbol, start_date):
     """
     Get the oldest transaction date for a given account_id and symbol.
     """
     connection = get_db_connection()
     cursor = connection.cursor()
     try:
+        # Query transactions after the specified start_date
         cursor.execute("""
             SELECT MIN(date)
             FROM transactions
-            WHERE account_id = %s AND symbol = %s
-        """, (account_id, symbol))
+            WHERE account_id = %s AND symbol = %s AND date > %s
+        """, (account_id, symbol, start_date))
         return cursor.fetchone()[0]
     finally:
         cursor.close()
@@ -118,12 +136,12 @@ def remove_orphaned_monthly_holdings(account_id, symbols):
         cursor.close()
         connection.close()
 
-def calculate_monthly_holdings(account_id, symbols):
+def calculate_monthly_holdings(account_id, symbols, start_date):
     """
     Calculate and update the monthly holdings for each account's asset_name.
     """
     for symbol in symbols:
-        oldest_transaction_date = get_oldest_transaction_date(account_id, symbol)
+        oldest_transaction_date = get_oldest_transaction_date(account_id, symbol, start_date)
         if not oldest_transaction_date:
             log_message(f"No transactions found for account_id: {account_id}, symbol: {symbol}. Skipping.")
             continue
@@ -135,27 +153,58 @@ def calculate_monthly_holdings(account_id, symbols):
 
         update_monthly_holdings(account_id, symbol, most_recent_monthly_date)
 
-def run(message_payload):
+def publish_transactions_processed():
     """
-    Main function to calculate and update monthly holdings based on the Kafka message payload.
+    Publish a Kafka topic indicating that transactions have been processed.
+    """
+    # Use the centralized publish_kafka_messages method
+    params = {"status": "transactions_processed"}
+    publish_kafka_messages(ProducerKafkaTopics.PROCESS_TRANSACTIONS_TO_HOLDINGS_MONTHLY_COMPLETE, params)
+
+def run(message_payload=None):
+    """
+    Main function to calculate and update monthly holdings.
+    If message_payload is provided, process for the specific account_id and symbols.
+    If no message_payload is provided, process for all accounts and their symbols.
     """
     log_message("Starting process_transactions_to_holdings_monthly job...")
-    log_message(f"Received message payload: {message_payload}")
 
-    account_id = message_payload.get("account_id")
-    transactions_added = message_payload.get("transactions_added", [])
-    transactions_deleted = message_payload.get("transactions_deleted", [])
+    if message_payload:
+        log_message(f"Received message payload: {message_payload}")
 
-    # Extract symbols from added and deleted transactions
-    added_symbols = list({transaction["symbol"] for transaction in transactions_added})
-    deleted_symbols = list({transaction["symbol"] for transaction in transactions_deleted})
+        account_id = message_payload.get("account_id")
+        transactions_added = message_payload.get("transactions_added", [])
+        transactions_deleted = message_payload.get("transactions_deleted", [])
 
-    log_message(f"Processing account_id: {account_id} with added symbols: {added_symbols} and deleted symbols: {deleted_symbols}")
+        # Extract symbols from added and deleted transactions
+        added_symbols = list({transaction["symbol"] for transaction in transactions_added})
+        deleted_symbols = list({transaction["symbol"] for transaction in transactions_deleted})
 
-    # Remove orphaned monthly holdings for deleted symbols
-    remove_orphaned_monthly_holdings(account_id, deleted_symbols)
+        # Determine the start_date as the oldest date from transactions_added or transactions_deleted
+        all_dates = [transaction["date"] for transaction in transactions_added + transactions_deleted]
+        start_date = min(all_dates) if all_dates else None
 
-    # Calculate and update monthly holdings for added symbols
-    calculate_monthly_holdings(account_id, added_symbols)
+        log_message(f"Processing account_id: {account_id} with added symbols: {added_symbols}, deleted symbols: {deleted_symbols}, start_date: {start_date}")
+
+        # Remove orphaned monthly holdings for deleted symbols
+        remove_orphaned_monthly_holdings(account_id, deleted_symbols)
+
+        # Calculate and update monthly holdings for added symbols
+        calculate_monthly_holdings(account_id, added_symbols, start_date)
+    else:
+        log_message("No message payload provided. Processing all accounts and symbols.")
+
+        # Use the 1st day of the previous month as the start_date
+        start_date = align_to_first_day_of_month(datetime.utcnow().date() - relativedelta(months=1))
+
+        # Retrieve all accounts and their symbols
+        accounts_and_symbols = get_all_accounts_and_symbols()
+
+        for account_id, symbol in accounts_and_symbols:
+            log_message(f"Processing account_id: {account_id}, symbol: {symbol}, start_date: {start_date}")
+            calculate_monthly_holdings(account_id, [symbol], start_date)
+
+    # Publish a Kafka message indicating the job is complete
+    publish_transactions_processed()
 
     log_message("process_transactions_to_holdings_monthly job completed successfully.")
