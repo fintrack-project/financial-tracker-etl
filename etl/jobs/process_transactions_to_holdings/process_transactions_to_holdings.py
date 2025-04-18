@@ -7,10 +7,10 @@ from main import publish_kafka_messages, ProducerKafkaTopics
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-def aggregate_transactions(account_id, symbols):
+def aggregate_transactions(account_id, transaction_ids):
     """
     Aggregate transactions by account_id and asset_name to calculate total balances.
-    Only process transactions for the given account_id and symbols.
+    Only process transactions for the given account_id and transaction_ids.
     """
     connection = get_db_connection()
     cursor = connection.cursor()
@@ -19,9 +19,9 @@ def aggregate_transactions(account_id, symbols):
             SELECT account_id, asset_name, symbol, unit, 
                 SUM(credit) - SUM(debit) AS total_balance
             FROM transactions
-            WHERE account_id = %s AND symbol = ANY(%s)
+            WHERE account_id = %s AND transaction_id = ANY(%s) AND deleted_at IS NULL
             GROUP BY account_id, asset_name, symbol, unit
-        """, (account_id, symbols))
+        """, (account_id, transaction_ids))
         transactions = cursor.fetchall()
         return transactions
     except Exception as e:
@@ -31,7 +31,7 @@ def aggregate_transactions(account_id, symbols):
         cursor.close()
         connection.close()
 
-def update_holdings(transactions):
+def update_holdings(account_id, aggregated_transactions):
     """
     Update the holdings table with the total balance for each account's asset_name.
     Remove any asset_name from holdings that no longer exists in transactions.
@@ -40,9 +40,9 @@ def update_holdings(transactions):
     cursor = connection.cursor()
 
     try:
-        # Step 1: Update or insert holdings based on transactions
+        # Step 1: Update or insert holdings based on aggregated transactions
         processed_asset_names = set()
-        for transaction in transactions:
+        for transaction in aggregated_transactions:
             account_id, asset_name, symbol, unit, total_balance = transaction
 
             log_message(f"Updating holdings for account_id: {account_id}, asset_name: {asset_name}, symbol: {symbol}, total_balance: {total_balance}, unit: {unit}")
@@ -68,7 +68,7 @@ def update_holdings(transactions):
             WHERE account_id = %s AND (account_id, asset_name) NOT IN (
                 SELECT account_id, asset_name
                 FROM transactions
-                WHERE account_id = %s
+                WHERE account_id = %s AND deleted_at IS NULL
                 GROUP BY account_id, asset_name
             )
         """, (account_id, account_id))
@@ -100,20 +100,20 @@ def run(message_payload):
     log_message("Starting process_transactions_to_holdings job...")
     log_message(f"Received message payload: {message_payload}")
 
-    # Extract account_id and symbols from the payload
+    # Extract account_id and transaction IDs from the payload
     account_id = message_payload.get("account_id")
     transactions_added = message_payload.get("transactions_added", [])
-    symbols = list({transaction["symbol"] for transaction in transactions_added})
+    transactions_deleted = message_payload.get("transactions_deleted", [])
 
-    log_message(f"Processing account_id: {account_id} with symbols: {symbols}")
+    log_message(f"Processing account_id: {account_id} with added transactions: {transactions_added} and deleted transactions: {transactions_deleted}")
 
-    # Aggregate transactions for the given account_id and symbols
-    aggregated_transactions = aggregate_transactions(account_id, symbols)
+    # Aggregate transactions for the added transaction IDs
+    aggregated_transactions = aggregate_transactions(account_id, transactions_added)
 
     log_message(f"Aggregated transactions: {aggregated_transactions}")
 
     # Update holdings based on the aggregated transactions
-    update_holdings(aggregated_transactions)
+    update_holdings(account_id, aggregated_transactions)
 
     # Publish a Kafka message indicating the job is complete
     publish_transactions_processed()
