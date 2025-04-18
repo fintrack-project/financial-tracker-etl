@@ -111,7 +111,6 @@ def publish_market_average_data_update_complete(data):
     """
     Publish a Kafka topic indicating that the market average data update is complete.
     """
-    log_message(f"Publishing Kafka topic: {ProducerKafkaTopics.MARKET_AVERAGE_DATA_UPDATE_COMPLETE.value}...")
     message_payload = [
         {
             "symbol": record["symbol"],
