@@ -14,6 +14,7 @@ class ConsumerKafkaTopics(Enum):
     TRANSACTIONS_CONFIRMED = "TRANSACTIONS_CONFIRMED"
     MARKET_DATA_UPDATE_REQUEST = "MARKET_DATA_UPDATE_REQUEST"
     MARKET_AVERAGE_DATA_UPDATE_REQUEST = "MARKET_AVERAGE_DATA_UPDATE_REQUEST"
+    HOLDINGS_MONTHLY_REQUEST = "HOLDINGS_MONTHLY_REQUEST"
 
 class ProducerKafkaTopics(Enum):
     """
@@ -41,6 +42,11 @@ TOPIC_TO_JOB_MAP = {
     ConsumerKafkaTopics.MARKET_AVERAGE_DATA_UPDATE_REQUEST.value: {
         "jobs": [
             {"job_name": "fetch_market_average_data", "requires_params": True}
+        ]
+    },
+    ConsumerKafkaTopics.HOLDINGS_MONTHLY_REQUEST.value: {
+        "jobs": [
+            {"job_name": "process_transactions_to_holdings_monthly", "requires_params": False}
         ]
     }
 }
