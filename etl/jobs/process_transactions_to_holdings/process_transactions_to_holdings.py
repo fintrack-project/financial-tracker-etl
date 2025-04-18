@@ -7,9 +7,10 @@ from main import publish_kafka_messages, ProducerKafkaTopics
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-def aggregate_transactions():
+def aggregate_transactions(account_id, symbols):
     """
     Aggregate transactions by account_id and asset_name to calculate total balances.
+    Only process transactions for the given account_id and symbols.
     """
     connection = get_db_connection()
     cursor = connection.cursor()
@@ -18,8 +19,9 @@ def aggregate_transactions():
             SELECT account_id, asset_name, symbol, unit, 
                 SUM(credit) - SUM(debit) AS total_balance
             FROM transactions
+            WHERE account_id = %s AND symbol = ANY(%s)
             GROUP BY account_id, asset_name, symbol, unit
-        """)
+        """, (account_id, symbols))
         transactions = cursor.fetchall()
         return transactions
     except Exception as e:
@@ -63,12 +65,13 @@ def update_holdings(transactions):
         log_message("Removing orphaned records from holdings...")
         cursor.execute("""
             DELETE FROM holdings
-            WHERE (account_id, asset_name) NOT IN (
+            WHERE account_id = %s AND (account_id, asset_name) NOT IN (
                 SELECT account_id, asset_name
                 FROM transactions
+                WHERE account_id = %s
                 GROUP BY account_id, asset_name
             )
-        """)
+        """, (account_id, account_id))
 
         # Commit the changes to the database
         connection.commit()
@@ -90,18 +93,32 @@ def publish_transactions_processed():
     params = {"status": "transactions_processed"}
     publish_kafka_messages(ProducerKafkaTopics.PROCESS_TRANSACTIONS_TO_HOLDINGS, params)
 
-def run():
+def run(message_payload):
     """
-    Main function to calculate and update holdings.
+    Main function to calculate and update holdings based on the Kafka message payload.
     """
     log_message("Starting process_transactions_to_holdings job...")
-    aggregated_transactions = aggregate_transactions()
+    log_message(f"Received message payload: {message_payload}")
+
+    # Extract account_id and symbols from the payload
+    account_id = message_payload.get("account_id")
+    transactions_added = message_payload.get("transactions_added", [])
+    symbols = list({transaction["symbol"] for transaction in transactions_added})
+
+    log_message(f"Processing account_id: {account_id} with symbols: {symbols}")
+
+    # Aggregate transactions for the given account_id and symbols
+    aggregated_transactions = aggregate_transactions(account_id, symbols)
 
     log_message(f"Aggregated transactions: {aggregated_transactions}")
 
+    # Update holdings based on the aggregated transactions
     update_holdings(aggregated_transactions)
+
+    # Publish a Kafka message indicating the job is complete
     publish_transactions_processed()
     log_message("process_transactions_to_holdings job completed successfully.")
+
 
 if __name__ == "__main__":
     run()

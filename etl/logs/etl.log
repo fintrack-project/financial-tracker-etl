@@ -360,3 +360,32 @@
 2025-04-17 18:00:51,037 - INFO - Validating symbols against the holdings table...
 2025-04-17 18:00:51,037 - INFO - Symbols to validate: ['AAPL', 'TSLA', 'INVALID']
 2025-04-17 18:00:51,037 - INFO - Warning: The following symbols do not exist in the holdings table and will be ignored: {'INVALID'}
+2025-04-18 10:59:33,806 - INFO - Running fetch_market_average_data job...
+2025-04-18 10:59:33,806 - INFO - Received message content: {'symbols': ['^GSPC', '^NDX']}
+2025-04-18 10:59:33,806 - INFO - Received symbols: ['^GSPC', '^NDX']
+2025-04-18 10:59:33,806 - INFO - Starting fetch_market_average_data job...
+2025-04-18 10:59:33,806 - INFO - Closest US market closing time in UTC: 2025-04-16 20:00:00
+2025-04-18 10:59:33,806 - INFO - All market average data is up-to-date. Using existing data.
+2025-04-18 10:59:33,807 - INFO - Fetching symbols that need price updates...
+2025-04-18 10:59:33,807 - INFO - Most recent US market closing time in UTC: 2025-04-16 20:00:00
+2025-04-18 10:59:33,807 - INFO - Found 2 symbols needing updates.
+2025-04-18 10:59:33,807 - INFO - Starting update_market_data job...
+2025-04-18 10:59:33,807 - INFO - Received message payload: INVALID_INPUT
+2025-04-18 10:59:33,807 - INFO - Error: message_payload must be a dictionary with a 'symbols' key.
+2025-04-18 10:59:33,808 - INFO - Starting update_market_data job...
+2025-04-18 10:59:33,808 - INFO - Received message payload: {'symbols': ['AAPL', 'TSLA']}
+2025-04-18 10:59:33,808 - INFO - Received symbols: ['AAPL', 'TSLA']
+2025-04-18 10:59:33,808 - INFO - No symbols need updates. Exiting job.
+2025-04-18 10:59:33,808 - INFO - update_market_data job completed successfully.
+2025-04-18 10:59:33,808 - INFO - Starting update_market_data job...
+2025-04-18 10:59:33,808 - INFO - Received message payload: {'symbols': ['INVALID']}
+2025-04-18 10:59:33,808 - INFO - Received symbols: ['INVALID']
+2025-04-18 10:59:33,808 - INFO - No valid symbols found. Exiting job.
+2025-04-18 10:59:33,809 - INFO - Starting update_market_data job...
+2025-04-18 10:59:33,809 - INFO - Received message payload: {'symbols': ['AAPL', 'TSLA']}
+2025-04-18 10:59:33,809 - INFO - Received symbols: ['AAPL', 'TSLA']
+2025-04-18 10:59:33,809 - INFO - Symbols needing updates: ['AAPL', 'TSLA']
+2025-04-18 10:59:33,809 - INFO - update_market_data job completed successfully.
+2025-04-18 10:59:33,809 - INFO - Validating symbols against the holdings table...
+2025-04-18 10:59:33,809 - INFO - Symbols to validate: ['AAPL', 'TSLA', 'INVALID']
+2025-04-18 10:59:33,809 - INFO - Warning: The following symbols do not exist in the holdings table and will be ignored: {'INVALID'}

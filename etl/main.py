@@ -26,7 +26,7 @@ class ProducerKafkaTopics(Enum):
 
 # Updated TOPIC_TO_JOB_MAP structure
 TOPIC_TO_JOB_MAP = {
-    ConsumerKafkaTopics.TRANSACTIONS_CONFIRMED.value: {"job_name": "process_transactions_to_holdings", "requires_params": False},
+    ConsumerKafkaTopics.TRANSACTIONS_CONFIRMED.value: {"job_name": "process_transactions_to_holdings", "requires_params": True},
     ConsumerKafkaTopics.MARKET_DATA_UPDATE_REQUEST.value: {"job_name": "fetch_market_data", "requires_params": True},
     ConsumerKafkaTopics.MARKET_AVERAGE_DATA_UPDATE_REQUEST.value: {"job_name": "fetch_market_average_data", "requires_params": True}
 }
@@ -108,8 +108,8 @@ def consume_kafka_messages():
                 if requires_params:
                     try:
                         # Parse the message content as JSON
-                        message_content = json.loads(value)
-                        run_job(job_name, message_content)
+                        message_payload = json.loads(value)
+                        run_job(job_name, message_payload)
                     except json.JSONDecodeError:
                         print(f"Error: Failed to decode JSON message on topic '{topic}'. Skipping job '{job_name}'.")
                         continue
