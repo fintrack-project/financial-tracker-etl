@@ -196,21 +196,18 @@ def run(message_payload=None):
 
         # Remove orphaned monthly holdings for deleted assets
         remove_orphaned_monthly_holdings(account_id, deleted_assets)
-
-        # Calculate and update monthly holdings for added assets
-        calculate_monthly_holdings(account_id, added_assets, start_date)
     else:
         log_message("No message payload provided. Processing all accounts and assets.")
 
-        # Use the 1st day of the previous month as the start_date
-        start_date = align_to_first_day_of_month(datetime.utcnow().date() - relativedelta(months=1))
+    # Use the 1st day of the previous month as the start_date
+    start_date = align_to_first_day_of_month(datetime.utcnow().date() - relativedelta(months=1))
 
-        # Retrieve all accounts and their assets
-        accounts_and_assets = get_all_accounts_and_assets()
+    # Retrieve all accounts and their assets
+    accounts_and_assets = get_all_accounts_and_assets()
 
-        for account_id, asset_name in accounts_and_assets:
-            log_message(f"Processing account_id: {account_id}, asset_name: {asset_name}, start_date: {start_date}")
-            calculate_monthly_holdings(account_id, [asset_name], start_date)
+    for account_id, asset_name in accounts_and_assets:
+        log_message(f"Processing account_id: {account_id}, asset_name: {asset_name}, start_date: {start_date}")
+        calculate_monthly_holdings(account_id, [asset_name], start_date)
 
     # Publish a Kafka message indicating the job is complete
     publish_transactions_processed()
