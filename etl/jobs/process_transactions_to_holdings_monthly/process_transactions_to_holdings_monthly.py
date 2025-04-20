@@ -52,6 +52,23 @@ def get_all_accounts_and_assets():
         connection.close()
     return accounts_and_assets
 
+def get_all_assets(account_id):
+    """
+    Retrieve all asset names for a given account_id.
+    """
+    connection = get_db_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute("""
+            SELECT DISTINCT asset_name
+            FROM transactions
+            WHERE account_id = %s AND deleted_at IS NULL
+        """, (account_id,))
+        return [row[0] for row in cursor.fetchall()]
+    finally:
+        cursor.close()
+        connection.close()
+
 def get_earliest_transaction_date(account_id):
     """
     Retrieve the earliest transaction date for a given account_id.
@@ -291,18 +308,23 @@ def run(message_payload=None):
 
         # Use the 1st day of the month of earliest date of all transactions as the start_date
         start_date = get_earliest_transaction_date(account_id)
+
+        for asset_name in get_all_assets(account_id):
+            log_message(f"Processing account_id: {account_id}, asset_name: {asset_name}, start_date: {start_date}")
+            calculate_monthly_holdings(account_id, [asset_name], start_date)
+
     else:
         log_message("No message payload provided. Processing all accounts and assets.")
 
         # Use the 1st day of the previous month as the start_date
         start_date = align_to_first_day_of_month(datetime.utcnow().date() - relativedelta(months=1))
 
-    # Retrieve all accounts and their assets
-    accounts_and_assets = get_all_accounts_and_assets()
+        # Retrieve all accounts and their assets
+        accounts_and_assets = get_all_accounts_and_assets()
 
-    for account_id, asset_name in accounts_and_assets:
-        log_message(f"Processing account_id: {account_id}, asset_name: {asset_name}, start_date: {start_date}")
-        calculate_monthly_holdings(account_id, [asset_name], start_date)
+        for account_id, asset_name in accounts_and_assets:
+            log_message(f"Processing account_id: {account_id}, asset_name: {asset_name}, start_date: {start_date}")
+            calculate_monthly_holdings(account_id, [asset_name], start_date)
 
     # Publish a Kafka message indicating the job is complete
     publish_transactions_processed()

@@ -196,9 +196,6 @@ def update_holdings(account_id):
                 # Step 3: Insert or update the holdings table
                 insert_or_update_holding(cursor, account_id, asset_name, symbol, unit, total_balance)
 
-        # Step 4: Remove orphaned records from holdings
-        remove_orphaned_holdings(account_id, asset_names)
-
         # Commit the changes to the database
         connection.commit()
         log_message(f"Holdings table updated successfully for account_id: {account_id}.")
@@ -242,6 +239,9 @@ def run(message_payload):
 
     log_message(f"Transactions added: {transactions_added}, Transactions deleted: {transactions_deleted}")
     log_message(f"Processing account_id: {account_id} with added assets: {added_assets}, deleted assets: {deleted_assets}")
+
+    # Step 4: Remove orphaned records from holdings
+    remove_orphaned_holdings(account_id, deleted_assets)
 
     # Update holdings of account
     update_holdings(account_id)
