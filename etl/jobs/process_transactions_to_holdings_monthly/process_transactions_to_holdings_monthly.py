@@ -52,6 +52,24 @@ def get_all_accounts_and_assets():
         connection.close()
     return accounts_and_assets
 
+def get_earliest_transaction_date(account_id):
+    """
+    Retrieve the earliest transaction date for a given account_id.
+    """
+    connection = get_db_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute("""
+            SELECT MIN(date)
+            FROM transactions
+            WHERE account_id = %s AND deleted_at IS NULL
+        """, (account_id,))
+        result = cursor.fetchone()
+        return result[0] if result else None
+    finally:
+        cursor.close()
+        connection.close()
+
 def align_to_first_day_of_month(date):
     """
     Align a given date to the 1st day of its month.
@@ -85,6 +103,42 @@ def remove_orphaned_monthly_holdings(account_id, assets):
         connection.commit()
     except Exception as e:
         log_message(f"Error while removing orphaned monthly holdings: {e}")
+        connection.rollback()
+        raise
+    finally:
+        cursor.close()
+        connection.close()
+
+def remove_invalid_monthly_holdings(account_id, assets):
+    """
+    Remove invalid monthly holdings for assets where deleted transactions invalidate subsequent holdings.
+    """
+    if not assets:
+        log_message(f"No assets to process for account_id: {account_id}")
+        return
+
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    try:
+        log_message(f"Checking for invalid monthly holdings for account_id: {account_id}, assets: {assets}...")
+
+        # Remove invalid holdings in a single query
+        cursor.execute("""
+            DELETE FROM holdings_monthly
+            WHERE account_id = %s AND asset_name = ANY(%s)
+            AND EXISTS (
+                SELECT 1
+                FROM transactions
+                WHERE account_id = %s AND asset_name = holdings_monthly.asset_name
+                AND deleted_at IS NOT NULL AND deleted_at <= holdings_monthly.date
+            )
+        """, (account_id, assets, account_id))
+        log_message(f"Removed invalid monthly holdings for account_id: {account_id}, assets: {assets}")
+
+        connection.commit()
+    except Exception as e:
+        log_message(f"Error while removing invalid monthly holdings: {e}")
         connection.rollback()
         raise
     finally:
@@ -178,29 +232,19 @@ def run(message_payload=None):
         log_message(f"Transactions added: {transactions_added}, Transactions deleted: {transactions_deleted}")
         log_message(f"Processing account_id: {account_id} with added assets: {added_assets}, deleted assets: {deleted_assets}")
 
-        # Determine the start_date as the oldest date from transactions_added or transactions_deleted
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        try:
-            cursor.execute("""
-                SELECT MIN(date)
-                FROM transactions
-                WHERE transaction_id = ANY(%s) OR transaction_id = ANY(%s)
-            """, (transactions_added, transactions_deleted))
-            start_date = cursor.fetchone()[0] or datetime.utcnow().date()
-        finally:
-            cursor.close()
-            connection.close()
-
-        log_message(f"Processing account_id: {account_id} with added assets: {added_assets}, deleted assets: {deleted_assets}, start_date: {start_date}")
-
         # Remove orphaned monthly holdings for deleted assets
         remove_orphaned_monthly_holdings(account_id, deleted_assets)
+
+        # Remove invalid monthly holdings for added assets
+        remove_invalid_monthly_holdings(account_id, added_assets)
+
+        # Use the 1st day of the month of earliest date of all transactions as the start_date
+        start_date = get_earliest_transaction_date(account_id)
     else:
         log_message("No message payload provided. Processing all accounts and assets.")
 
-    # Use the 1st day of the previous month as the start_date
-    start_date = align_to_first_day_of_month(datetime.utcnow().date() - relativedelta(months=1))
+        # Use the 1st day of the previous month as the start_date
+        start_date = align_to_first_day_of_month(datetime.utcnow().date() - relativedelta(months=1))
 
     # Retrieve all accounts and their assets
     accounts_and_assets = get_all_accounts_and_assets()
