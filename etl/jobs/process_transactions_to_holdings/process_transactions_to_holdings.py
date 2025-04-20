@@ -53,6 +53,53 @@ def insert_or_update_holding(cursor, account_id, asset_name, symbol, unit, total
             updated_at = EXCLUDED.updated_at
     """, (account_id, asset_name, symbol, total_balance, unit))
 
+def remove_all_holdings_for_account_if_no_transactions_exist(account_id):
+    """
+    Check if no transactions exist for the given account_id.
+    If no transactions exist, remove all holdings and monthly holdings for that account.
+    """
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    try:
+        log_message(f"Checking if any transactions exist for account_id: {account_id}...")
+
+        # Check if there are any non-deleted transactions for the account
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM transactions
+            WHERE account_id = %s AND deleted_at IS NULL
+        """, (account_id,))
+        transaction_count = cursor.fetchone()[0]
+
+        if transaction_count == 0:
+            log_message(f"No transactions found for account_id: {account_id}. Removing all holdings...")
+
+            # Remove all records from the holdings table
+            cursor.execute("""
+                DELETE FROM holdings
+                WHERE account_id = %s
+            """, (account_id,))
+            log_message(f"All holdings removed for account_id: {account_id}.")
+
+            # Remove all records from the holdings_monthly table
+            cursor.execute("""
+                DELETE FROM holdings_monthly
+                WHERE account_id = %s
+            """, (account_id,))
+            log_message(f"All monthly holdings removed for account_id: {account_id}.")
+
+            connection.commit()
+        else:
+            log_message(f"Transactions exist for account_id: {account_id}. No holdings were removed.")
+
+    except Exception as e:
+        log_message(f"Error while checking and removing holdings for account_id {account_id}: {e}")
+        connection.rollback()
+        raise
+    finally:
+        cursor.close()
+        connection.close()
 
 def remove_orphaned_holdings(account_id, assets):
     """
@@ -185,6 +232,9 @@ def run(message_payload):
     transactions_deleted = message_payload.get("transactions_deleted", [])
 
     log_message(f"Processing account_id: {account_id} with added transactions: {transactions_added} and deleted transactions: {transactions_deleted}")
+
+    # Check if no transactions exist and remove all holdings if necessary
+    remove_all_holdings_for_account_if_no_transactions_exist(account_id)
 
     # Retrieve assets for added and deleted transactions
     added_assets = get_assets_by_transaction_ids(transactions_added)
