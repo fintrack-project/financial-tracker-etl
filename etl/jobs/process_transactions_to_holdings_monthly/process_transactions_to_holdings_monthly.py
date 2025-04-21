@@ -244,7 +244,7 @@ def calculate_monthly_holdings(account_id, assets, start_date):
                 cursor.execute("""
                     SELECT SUM(credit) - SUM(debit) AS total_balance
                     FROM transactions
-                    WHERE account_id = %s AND asset_name = %s AND date <= %s AND deleted_at IS NULL
+                    WHERE account_id = %s AND asset_name = %s AND date < %s AND deleted_at IS NULL
                 """, (account_id, asset_name, current_date))
                 total_balance = cursor.fetchone()[0]
 
