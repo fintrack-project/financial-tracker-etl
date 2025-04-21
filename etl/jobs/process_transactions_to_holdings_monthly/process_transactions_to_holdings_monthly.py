@@ -144,6 +144,7 @@ def remove_all_holdings_for_account_if_no_transactions_exist(account_id):
 def remove_orphaned_monthly_holdings(account_id, assets):
     """
     Remove orphaned monthly holdings for assets that no longer have any transactions.
+    Log the orphaned records before deleting them.
     """
     if not assets:
         log_message(f"No assets to process for account_id: {account_id}")
@@ -153,9 +154,12 @@ def remove_orphaned_monthly_holdings(account_id, assets):
     cursor = connection.cursor()
 
     try:
-        # Remove orphaned holdings in a single query
+        log_message(f"Checking for orphaned monthly holdings for account_id: {account_id}, assets: {assets}...")
+
+        # Fetch orphaned records
         cursor.execute("""
-            DELETE FROM holdings_monthly
+            SELECT account_id, asset_name, date, total_balance, unit, symbol
+            FROM holdings_monthly
             WHERE account_id = %s AND asset_name = ANY(%s)
             AND NOT EXISTS (
                 SELECT 1
@@ -163,7 +167,24 @@ def remove_orphaned_monthly_holdings(account_id, assets):
                 WHERE account_id = %s AND asset_name = holdings_monthly.asset_name AND deleted_at IS NULL
             )
         """, (account_id, assets, account_id))
-        log_message(f"Removed orphaned monthly holdings for account_id: {account_id}, assets: {assets}")
+        orphaned_records = cursor.fetchall()
+
+        if orphaned_records:
+            log_message(f"Orphaned monthly holdings found for account_id: {account_id}: {orphaned_records}")
+
+            # Remove orphaned holdings
+            cursor.execute("""
+                DELETE FROM holdings_monthly
+                WHERE account_id = %s AND asset_name = ANY(%s)
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM transactions
+                    WHERE account_id = %s AND asset_name = holdings_monthly.asset_name AND deleted_at IS NULL
+                )
+            """, (account_id, assets, account_id))
+            log_message(f"Removed orphaned monthly holdings for account_id: {account_id}, assets: {assets}")
+        else:
+            log_message(f"No orphaned monthly holdings found for account_id: {account_id}, assets: {assets}")
 
         connection.commit()
     except Exception as e:
@@ -177,6 +198,7 @@ def remove_orphaned_monthly_holdings(account_id, assets):
 def remove_invalid_monthly_holdings(account_id, assets):
     """
     Remove invalid monthly holdings for assets where deleted transactions invalidate subsequent holdings.
+    Log the invalid records before deleting them.
     """
     if not assets:
         log_message(f"No assets to process for account_id: {account_id}")
@@ -188,18 +210,41 @@ def remove_invalid_monthly_holdings(account_id, assets):
     try:
         log_message(f"Checking for invalid monthly holdings for account_id: {account_id}, assets: {assets}...")
 
-        # Remove invalid holdings in a single query
+        # Fetch invalid holdings
         cursor.execute("""
-            DELETE FROM holdings_monthly
-            WHERE account_id = %s AND asset_name = ANY(%s)
+            SELECT hm.account_id, hm.asset_name, hm.date, hm.total_balance, hm.unit, hm.symbol
+            FROM holdings_monthly hm
+            WHERE hm.account_id = %s AND hm.asset_name = ANY(%s)
             AND EXISTS (
                 SELECT 1
-                FROM transactions
-                WHERE account_id = %s AND asset_name = holdings_monthly.asset_name
-                AND deleted_at IS NOT NULL AND deleted_at <= holdings_monthly.date
+                FROM transactions t
+                WHERE t.account_id = hm.account_id
+                AND t.asset_name = hm.asset_name
+                AND t.deleted_at IS NOT NULL
+                AND t.date <= hm.date
             )
-        """, (account_id, assets, account_id))
-        log_message(f"Removed invalid monthly holdings for account_id: {account_id}, assets: {assets}")
+        """, (account_id, assets))
+        invalid_holdings = cursor.fetchall()
+
+        if invalid_holdings:
+            log_message(f"Invalid monthly holdings found for account_id: {account_id}: {invalid_holdings}")
+
+            # Remove invalid holdings
+            cursor.execute("""
+                DELETE FROM holdings_monthly
+                WHERE account_id = %s AND asset_name = ANY(%s)
+                AND EXISTS (
+                    SELECT 1
+                    FROM transactions t
+                    WHERE t.account_id = holdings_monthly.account_id
+                    AND t.asset_name = holdings_monthly.asset_name
+                    AND t.deleted_at IS NOT NULL
+                    AND t.date <= holdings_monthly.date
+                )
+            """, (account_id, assets))
+            log_message(f"Removed invalid monthly holdings for account_id: {account_id}, assets: {assets}")
+        else:
+            log_message(f"No invalid monthly holdings found for account_id: {account_id}, assets: {assets}")
 
         connection.commit()
     except Exception as e:
