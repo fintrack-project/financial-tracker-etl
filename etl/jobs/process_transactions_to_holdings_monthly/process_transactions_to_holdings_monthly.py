@@ -359,8 +359,8 @@ def run(message_payload=None):
         # Remove orphaned monthly holdings for deleted assets
         remove_orphaned_monthly_holdings(account_id, deleted_assets)
 
-        # Remove invalid monthly holdings for added assets
-        remove_invalid_monthly_holdings(account_id, added_assets)
+        # Remove invalid monthly holdings for both deleted and added assets
+        remove_invalid_monthly_holdings(account_id, list(set(added_assets + deleted_assets)))
 
         # Use the 1st day of the month of earliest date of all transactions as the start_date
         start_date = get_earliest_transaction_date(account_id)
