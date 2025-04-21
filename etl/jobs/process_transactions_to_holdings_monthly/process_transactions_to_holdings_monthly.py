@@ -232,7 +232,12 @@ def calculate_monthly_holdings(account_id, assets, start_date):
 
             unit, symbol = result
 
-            current_date = align_to_first_day_of_month(start_date) + relativedelta(months=1)
+            # Align start_date to the 1st day of the month
+            aligned_start_date = align_to_first_day_of_month(start_date)
+            if start_date != aligned_start_date:
+                current_date = aligned_start_date + relativedelta(months=1)
+            else:
+                current_date = aligned_start_date
 
             while current_date <= align_to_first_day_of_month(datetime.utcnow().date()):
                 # Aggregate transactions up to the current date
@@ -241,7 +246,13 @@ def calculate_monthly_holdings(account_id, assets, start_date):
                     FROM transactions
                     WHERE account_id = %s AND asset_name = %s AND date <= %s AND deleted_at IS NULL
                 """, (account_id, asset_name, current_date))
-                total_balance = cursor.fetchone()[0] or 0
+                total_balance = cursor.fetchone()[0]
+
+                # Skip updating if no transactions exist for the asset
+                if total_balance is None or total_balance == 0:
+                    log_message(f"No transactions found for account_id: {account_id}, asset_name: {asset_name}, date: {current_date}. Skipping update.")
+                    current_date += relativedelta(months=1)
+                    continue
 
                 # Update the monthly holdings table
                 cursor.execute("""
