@@ -57,7 +57,7 @@ def load_env_variables(env_file=".env"):
         raise FileNotFoundError(f"{env_file} file not found.")
     return env_vars
 
-def quote_market_data(symbols):
+def quote_market_data(symbols, region="US"):
     """
     Quote market data for the given symbols from Yahoo Finance via RapidAPI.
     """
@@ -72,7 +72,10 @@ def quote_market_data(symbols):
         "X-RapidAPI-Key": api_key,
         "X-RapidAPI-Host": "apidojo-yahoo-finance-v1.p.rapidapi.com"
     }
-    params = {"symbols": ",".join([quote(symbol) for symbol in symbols])}
+    params = {
+        "symbols": ",".join([quote(symbol) for symbol in symbols]),
+        "region": region
+    }
 
     try:
         response = requests.get(api_url, headers=headers, params=params)
