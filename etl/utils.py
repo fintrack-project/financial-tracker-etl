@@ -97,6 +97,142 @@ def quote_market_data(symbols, region="US"):
         log_message(f"Error quoting market data: {e}")
         raise
 
+def get_historical_stock_data(symbol, start_date=None, end_date=None):
+    """
+    Fetch historical stock data for the given symbol and date range using Alpha Vantage API.
+    """
+    log_message(f"Fetching historical stock data for symbol: {symbol}, start_date: {start_date}, end_date: {end_date}...")
+    api_host = os.getenv("ALPHA_VANTAGE_API_HOST")
+    api_query = os.getenv("ALPHA_VANTAGE_API_QUERY")
+    api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
+
+    if not api_host or not api_query or not api_key:
+        raise ValueError("ALPHA_VANTAGE_API_HOST, ALPHA_VANTAGE_API_QUERY, or ALPHA_VANTAGE_API_KEY is not set. Check your .env file.")
+
+    params = {
+        "function": "TIME_SERIES_DAILY",
+        "symbol": symbol,
+        "apikey": api_key
+    }
+
+    api_url = f"https://{api_host}{api_query}"
+
+    try:
+        response = requests.get(api_url, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        # Validate response structure
+        if "Time Series (Daily)" not in data:
+            raise ValueError("Invalid API response format for stock data.")
+
+        # Filter data by date range
+        time_series = data["Time Series (Daily)"]
+        filtered_data = {
+            date: values
+            for date, values in time_series.items()
+            if (not start_date or date >= start_date) and (not end_date or date <= end_date)
+        }
+
+        log_message(f"Successfully fetched historical stock data for symbol: {symbol}.")
+        return filtered_data
+
+    except requests.exceptions.RequestException as e:
+        log_message(f"Error fetching historical stock data for symbol {symbol}: {e}")
+        raise
+
+
+def get_historical_crypto_data(symbol, market="USD", start_date=None, end_date=None):
+    """
+    Fetch historical cryptocurrency data for the given symbol, market, and date range using Alpha Vantage API.
+    """
+    log_message(f"Fetching historical cryptocurrency data for symbol: {symbol}, market: {market}, start_date: {start_date}, end_date: {end_date}...")
+    api_host = os.getenv("ALPHA_VANTAGE_API_HOST")
+    api_query = os.getenv("ALPHA_VANTAGE_API_QUERY")
+    api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
+
+    if not api_host or not api_query or not api_key:
+        raise ValueError("ALPHA_VANTAGE_API_HOST, ALPHA_VANTAGE_API_QUERY, or ALPHA_VANTAGE_API_KEY is not set. Check your .env file.")
+
+    params = {
+        "function": "CRYPTO_DAILY",
+        "symbol": symbol,
+        "market": market,
+        "apikey": api_key
+    }
+
+    api_url = f"https://{api_host}{api_query}"
+
+    try:
+        response = requests.get(api_url, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        # Validate response structure
+        if "Time Series (Digital Currency Daily)" not in data:
+            raise ValueError("Invalid API response format for cryptocurrency data.")
+
+        # Filter data by date range
+        time_series = data["Time Series (Digital Currency Daily)"]
+        filtered_data = {
+            date: values
+            for date, values in time_series.items()
+            if (not start_date or date >= start_date) and (not end_date or date <= end_date)
+        }
+
+        log_message(f"Successfully fetched historical cryptocurrency data for symbol: {symbol}.")
+        return filtered_data
+
+    except requests.exceptions.RequestException as e:
+        log_message(f"Error fetching historical cryptocurrency data for symbol {symbol}: {e}")
+        raise
+
+
+def get_historical_fx_data(from_symbol, to_symbol, start_date=None, end_date=None):
+    """
+    Fetch historical forex data for the given currency pair and date range using Alpha Vantage API.
+    """
+    log_message(f"Fetching historical forex data for pair: {from_symbol}/{to_symbol}, start_date: {start_date}, end_date: {end_date}...")
+    api_host = os.getenv("ALPHA_VANTAGE_API_HOST")
+    api_query = os.getenv("ALPHA_VANTAGE_API_QUERY")
+    api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
+
+    if not api_host or not api_query or not api_key:
+        raise ValueError("ALPHA_VANTAGE_API_HOST, ALPHA_VANTAGE_API_QUERY, or ALPHA_VANTAGE_API_KEY is not set. Check your .env file.")
+
+    params = {
+        "function": "FX_DAILY",
+        "from_symbol": from_symbol,
+        "to_symbol": to_symbol,
+        "apikey": api_key
+    }
+
+    api_url = f"https://{api_host}{api_query}"
+
+    try:
+        response = requests.get(api_url, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        # Validate response structure
+        if "Time Series FX (Daily)" not in data:
+            raise ValueError("Invalid API response format for forex data.")
+
+        # Filter data by date range
+        time_series = data["Time Series FX (Daily)"]
+        filtered_data = {
+            date: values
+            for date, values in time_series.items()
+            if (not start_date or date >= start_date) and (not end_date or date <= end_date)
+        }
+
+        log_message(f"Successfully fetched historical forex data for pair: {from_symbol}/{to_symbol}.")
+        return filtered_data
+
+    except requests.exceptions.RequestException as e:
+        log_message(f"Error fetching historical forex data for pair {from_symbol}/{to_symbol}: {e}")
+        raise
+
 def get_closest_us_market_closing_time():
     """
     Calculate the most recent US market closing time (4:00 PM EDT).

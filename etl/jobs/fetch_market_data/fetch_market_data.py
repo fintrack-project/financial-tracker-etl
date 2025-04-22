@@ -1,7 +1,5 @@
 from etl.utils import get_db_connection, log_message, quote_market_data, get_closest_us_market_closing_time
-from confluent_kafka import Producer
 from main import publish_kafka_messages, ProducerKafkaTopics
-from datetime import timedelta
 
 def validate_symbols(symbols):
     """

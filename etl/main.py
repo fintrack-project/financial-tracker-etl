@@ -15,6 +15,7 @@ class ConsumerKafkaTopics(Enum):
     MARKET_DATA_UPDATE_REQUEST = "MARKET_DATA_UPDATE_REQUEST"
     MARKET_AVERAGE_DATA_UPDATE_REQUEST = "MARKET_AVERAGE_DATA_UPDATE_REQUEST"
     HOLDINGS_MONTHLY_REQUEST = "HOLDINGS_MONTHLY_REQUEST"
+    MARKET_DATA_MONTHLY_REQUEST = "MARKET_DATA_MONTHLY_REQUEST"
 
 class ProducerKafkaTopics(Enum):
     """
@@ -24,6 +25,7 @@ class ProducerKafkaTopics(Enum):
     MARKET_AVERAGE_DATA_UPDATE_COMPLETE = "MARKET_AVERAGE_DATA_UPDATE_COMPLETE"
     PROCESS_TRANSACTIONS_TO_HOLDINGS_COMPLETE = "PROCESS_TRANSACTIONS_TO_HOLDINGS_COMPLETE"
     PROCESS_TRANSACTIONS_TO_HOLDINGS_MONTHLY_COMPLETE = "PROCESS_TRANSACTIONS_TO_HOLDINGS_MONTHLY_COMPLETE"
+    MARKET_DATA_MONTHLY_COMPLETE = "MARKET_DATA_MONTHLY_COMPLETE"
 
 
 # Updated TOPIC_TO_JOB_MAP structure
@@ -47,6 +49,11 @@ TOPIC_TO_JOB_MAP = {
     ConsumerKafkaTopics.HOLDINGS_MONTHLY_REQUEST.value: {
         "jobs": [
             {"job_name": "process_transactions_to_holdings_monthly", "requires_params": False}
+        ]
+    },
+    ConsumerKafkaTopics.MARKET_DATA_MONTHLY_REQUEST.value: {
+        "jobs": [
+            {"job_name": "fetch_market_data_monthly", "requires_params": True}
         ]
     }
 }
