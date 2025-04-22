@@ -62,20 +62,24 @@ def quote_market_data(symbols, region="US"):
     Quote market data for the given symbols from Yahoo Finance via RapidAPI.
     """
     log_message("Quoting market data from external API...")
-    api_url = os.getenv("RAPIDAPI_URL")
+    api_host = os.getenv("RAPIDAPI_HOST")
+    api_market_get_quotes = os.getenv("RAPIDAPI_MARKET_GET_QUOTES")
     api_key = os.getenv("RAPIDAPI_KEY")
 
-    if not api_url or not api_key:
-        raise ValueError("API_URL or API_KEY is not set. Check your .env file.")
+    if not api_host or not api_key or not api_market_get_quotes:
+        log_message("API_HOST or API_KEY is not set. Check your .env file.")
+        raise ValueError("API_HOST or API_KEY is not set. Check your .env file.")
 
     headers = {
         "X-RapidAPI-Key": api_key,
-        "X-RapidAPI-Host": "apidojo-yahoo-finance-v1.p.rapidapi.com"
+        "X-RapidAPI-Host": api_host
     }
     params = {
         "symbols": ",".join([quote(symbol) for symbol in symbols]),
         "region": region
     }
+
+    api_url = f"https://{api_host}/{api_market_get_quotes}"
 
     try:
         response = requests.get(api_url, headers=headers, params=params)
