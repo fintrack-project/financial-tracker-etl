@@ -24,6 +24,10 @@ def adjust_date_range(start_date, end_date):
     # Set start_date to the first day of its month
     start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date().replace(day=1)
     end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
+    current_date = datetime.now().date()
+
+    if end_date_obj >= current_date.replace(day=1):
+        end_date_obj = current_date
 
     # Handle special case: start_date and end_date are the same
     fetch_current_month_only = (start_date_obj == end_date_obj)
