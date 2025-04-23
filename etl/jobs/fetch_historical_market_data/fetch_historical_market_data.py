@@ -32,7 +32,7 @@ def generate_first_dates_of_month(start_date, end_date):
 def fetch_historical_market_data(symbols, asset_type, start_date, end_date):
     """
     Fetch historical market data for the given symbols, asset type, and date range.
-    Validate existing data in the database and fetch missing data from Alpha Vantage API.
+    Validate existing data in the database and fetch missing data from Twelve Data API.
     """
     log_message(f"Fetching historical market data for symbols: {symbols}, asset_type: {asset_type}, start_date: {start_date}, end_date: {end_date}...")
 
@@ -49,14 +49,14 @@ def fetch_historical_market_data(symbols, asset_type, start_date, end_date):
 
         # Check for existing data in the database
         cursor.execute("""
-            SELECT symbol, date
+            SELECT symbol, date, price
             FROM market_data_monthly
             WHERE symbol = ANY(%s) AND asset_type = %s AND date = ANY(%s)
         """, (symbols, asset_type, first_dates))
         existing_data = cursor.fetchall()
 
         # Organize existing data by symbol and date
-        existing_data_by_symbol_and_date = {(row[0], row[1]): True for row in existing_data}
+        existing_data_by_symbol_and_date = {(row[0], row[1]): row[2] for row in existing_data}
         log_message(f"Found {len(existing_data)} existing records in the database.")
 
         # Determine symbols and dates needing updates
@@ -68,7 +68,7 @@ def fetch_historical_market_data(symbols, asset_type, start_date, end_date):
 
         log_message(f"Symbols and dates needing updates: {symbols_needing_update}")
 
-        # Fetch missing data from Alpha Vantage API
+        # Fetch missing data from Twelve Data API
         fetched_data = []
         for symbol, date in symbols_needing_update:
             if asset_type == 'stock':
@@ -83,11 +83,12 @@ def fetch_historical_market_data(symbols, asset_type, start_date, end_date):
                 continue
 
             # Process and format the fetched data
-            for api_date, values in api_data.items():
+            for entry in api_data:
+                api_date = entry["datetime"]
                 us_market_closing_time = get_closest_us_market_closing_time(datetime.strptime(api_date, "%Y-%m-%d"))
                 fetched_data.append({
                     "symbol": symbol,
-                    "price": float(values.get("4. close") or values.get("4a. close (USD)")),
+                    "price": float(entry["close"]),
                     "date": us_market_closing_time.date(),
                     "asset_type": asset_type
                 })
@@ -104,10 +105,10 @@ def fetch_historical_market_data(symbols, asset_type, start_date, end_date):
             connection.commit()
 
         # Combine existing and fetched data
-        all_data = existing_data + [
-            (record["symbol"], record["price"], record["date"], record["asset_type"])
-            for record in fetched_data
-        ]
+        all_data = [
+            {"symbol": row[0], "price": row[2], "date": row[1], "asset_type": asset_type}
+            for row in existing_data
+        ] + fetched_data
 
         log_message(f"Successfully fetched and updated historical market data.")
         return all_data
