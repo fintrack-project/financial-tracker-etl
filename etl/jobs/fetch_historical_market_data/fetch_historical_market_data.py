@@ -137,7 +137,7 @@ def publish_market_data_monthly_complete(symbols, asset_type, start_date, end_da
         "record_count": record_count,
         "status": "complete"
     }
-    publish_kafka_messages(ProducerKafkaTopics.MARKET_DATA_MONTHLY_COMPLETE, params)
+    publish_kafka_messages(ProducerKafkaTopics.HISTORICAL_MARKET_DATA_COMPLETE, params)
 
 
 def run(message_payload):
