@@ -1,7 +1,5 @@
 from etl.utils import get_db_connection, log_message, quote_market_data, get_closest_us_market_closing_time
-from confluent_kafka import Producer
 from main import publish_kafka_messages, ProducerKafkaTopics
-from datetime import timedelta
 
 def validate_symbols(symbols):
     """
@@ -125,7 +123,7 @@ def publish_price_update_complete(asset_names, asset_names_needing_update):
 
     # Use the centralized publish_kafka_messages method
     params = {"assets": asset_names, "updatedAssets": asset_names_needing_update, "status": "complete"}
-    publish_kafka_messages(ProducerKafkaTopics.ASSET_PRICE_UPDATE_COMPLETE, params)
+    publish_kafka_messages(ProducerKafkaTopics.MARKET_DATA_UPDATE_COMPLETE, params)
 
 def run(message_payload):
     """

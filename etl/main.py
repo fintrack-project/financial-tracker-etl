@@ -15,6 +15,7 @@ class ConsumerKafkaTopics(Enum):
     MARKET_DATA_UPDATE_REQUEST = "MARKET_DATA_UPDATE_REQUEST"
     MARKET_AVERAGE_DATA_UPDATE_REQUEST = "MARKET_AVERAGE_DATA_UPDATE_REQUEST"
     HOLDINGS_MONTHLY_REQUEST = "HOLDINGS_MONTHLY_REQUEST"
+    HISTORICAL_MARKET_DATA_REQUEST = "HISTORICAL_MARKET_DATA_REQUEST"
 
 class ProducerKafkaTopics(Enum):
     """
@@ -24,6 +25,7 @@ class ProducerKafkaTopics(Enum):
     MARKET_AVERAGE_DATA_UPDATE_COMPLETE = "MARKET_AVERAGE_DATA_UPDATE_COMPLETE"
     PROCESS_TRANSACTIONS_TO_HOLDINGS_COMPLETE = "PROCESS_TRANSACTIONS_TO_HOLDINGS_COMPLETE"
     PROCESS_TRANSACTIONS_TO_HOLDINGS_MONTHLY_COMPLETE = "PROCESS_TRANSACTIONS_TO_HOLDINGS_MONTHLY_COMPLETE"
+    HISTORICAL_MARKET_DATA_COMPLETE = "HISTORICAL_MARKET_DATA_COMPLETE"
 
 
 # Updated TOPIC_TO_JOB_MAP structure
@@ -48,6 +50,11 @@ TOPIC_TO_JOB_MAP = {
         "jobs": [
             {"job_name": "process_transactions_to_holdings_monthly", "requires_params": False}
         ]
+    },
+    ConsumerKafkaTopics.HISTORICAL_MARKET_DATA_REQUEST.value: {
+        "jobs": [
+            {"job_name": "fetch_historical_market_data", "requires_params": True}
+        ]
     }
 }
 
@@ -57,24 +64,24 @@ def run_job(job_name, params=None):
     If params are provided, pass them to the job's run() function.
     """
     try:
-        print(f"Attempting to import: etl.jobs.{job_name}")
+        log_message(f"Attempting to import: etl.jobs.{job_name}")
         job_module = importlib.import_module(f"etl.jobs.{job_name}")
-        print(f"Successfully imported: etl.jobs.{job_name}")
+        log_message(f"Successfully imported: etl.jobs.{job_name}")
 
         if params:
-            print(f"Attempting to run the 'run()' function in {job_name} with parameters: {params}")
+            log_message(f"Attempting to run the 'run()' function in {job_name} with parameters: {params}")
             job_module.run(params)
         else:
-            print(f"Attempting to run the 'run()' function in {job_name} without parameters")
+            log_message(f"Attempting to run the 'run()' function in {job_name} without parameters")
             job_module.run()
 
-        print(f"Successfully ran the 'run()' function in {job_name}")
+        log_message(f"Successfully ran the 'run()' function in {job_name}")
     except ModuleNotFoundError:
-        print(f"Error: Job '{job_name}' not found.")
-    except AttributeError:
-        print(f"Error: 'run()' function not found in job '{job_name}'.")
+        log_message(f"Error: Job '{job_name}' not found.")
+    except AttributeError as e:
+        log_message(f"Error: 'run()' function not found in job '{job_name}'. Details: {e}")
     except Exception as e:
-        print(f"Error while running job '{job_name}': {e}")
+        log_message(f"Error while running job '{job_name}': {e}")
 
 def consume_kafka_messages():
     """
@@ -89,7 +96,7 @@ def consume_kafka_messages():
     consumer = Consumer(consumer_config)
     consumer.subscribe([topic.value for topic in ConsumerKafkaTopics])  # Add more topics if needed
 
-    print("Kafka consumer started. Listening for messages...")
+    log_message("Kafka consumer started. Listening for messages...")
 
     try:
         while True:
@@ -104,17 +111,17 @@ def consume_kafka_messages():
                     continue
                 else:
                     # Handle other errors
-                    print(f"Kafka error: {msg.error()}")
+                    log_message(f"Kafka error: {msg.error()}")
                     continue
 
             # Process the message
             topic = msg.topic()
             value = msg.value().decode('utf-8')
-            print(f"Received message on topic '{topic}': {value}")
+            log_message(f"Received message on topic '{topic}': {value}")
 
             # Handle empty content
             if not value.strip():
-                print(f"Warning: Received empty message on topic '{topic}'. Skipping processing.")
+                log_message(f"Warning: Received empty message on topic '{topic}'. Skipping processing.")
                 continue
 
             # Trigger the appropriate jobs based on the topic
@@ -125,22 +132,22 @@ def consume_kafka_messages():
                     job_name = job_config["job_name"]
                     requires_params = job_config["requires_params"]
 
-                    print(f"Triggering job: {job_name}")
+                    log_message(f"Triggering job: {job_name}")
 
                     if requires_params:
                         try:
                             message_payload = json.loads(value)
                             run_job(job_name, message_payload)
                         except json.JSONDecodeError:
-                            print(f"Error: Failed to decode JSON message on topic '{topic}'. Skipping job '{job_name}'.")
+                            log_message(f"Error: Failed to decode JSON message on topic '{topic}'. Skipping job '{job_name}'.")
                             continue
                     else:
                         run_job(job_name)
             else:
-                print(f"Unknown topic: {topic}")
+                log_message(f"Unknown topic: {topic}")
 
     except KeyboardInterrupt:
-        print("Kafka consumer interrupted.")
+        log_message("Kafka consumer interrupted.")
     finally:
         consumer.close()
 
@@ -173,4 +180,4 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "consume":
         consume_kafka_messages()
     else:
-        print("Usage: python3 -m etl.main consume")
+        log_message("Usage: python3 -m etl.main consume")
