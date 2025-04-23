@@ -16,26 +16,19 @@ from main import publish_kafka_messages, ProducerKafkaTopics
 def adjust_date_range(start_date, end_date):
     """
     Adjust the start_date and end_date to handle edge cases:
-    - Ensure start_date and end_date are the first day of their respective months.
+    - Ensure start_date is the first day of its month.
     - Ensure the interval is at least 1 month.
+    - Include the first day of the current month if the current date is after the first day.
     - Prevent requests for future dates.
     """
-    # Set start_date and end_date to the first day of their respective months
+    # Set start_date to the first day of its month
     start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date().replace(day=1)
-    end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date().replace(day=1)
+    end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
 
-    # Ensure the interval is at least 1 month
-    if start_date_obj == end_date_obj:
-        end_date_obj = start_date_obj + relativedelta(months=1)
-        log_message(f"Adjusted end_date to ensure at least 1 month interval: {end_date_obj}")
+    # Handle special case: start_date and end_date are the same
+    fetch_current_month_only = (start_date_obj == end_date_obj)
 
-    # Prevent requests for future dates
-    current_date = datetime.now().date()
-    if end_date_obj > current_date:
-        end_date_obj = current_date.replace(day=1)
-        log_message(f"Adjusted end_date to current date to prevent future requests: {end_date_obj}")
-
-    return start_date_obj.strftime("%Y-%m-%d"), end_date_obj.strftime("%Y-%m-%d")
+    return start_date_obj.strftime("%Y-%m-%d"), end_date_obj.strftime("%Y-%m-%d"), fetch_current_month_only
 
 
 def fetch_existing_data_ranges(symbols, asset_type):
@@ -86,7 +79,7 @@ def determine_symbols_needing_update(symbols, asset_type, start_date, end_date, 
     return symbols_needing_update
 
 
-def fetch_and_insert_data(symbols_needing_update, asset_type):
+def fetch_and_insert_data(symbols_needing_update, asset_type, fetch_current_month_only):
     """
     Fetch missing data from the Twelve Data API and insert it into the database.
     """
@@ -111,16 +104,33 @@ def fetch_and_insert_data(symbols_needing_update, asset_type):
                         break
 
                     # Process and format the fetched data
-                    for entry in api_data:
-                        api_date = entry["datetime"]  # Use the exact date from the API response
-                        fetched_data.append({
-                            "symbol": symbol,
-                            "price": float(entry["close"]),
-                            "date": datetime.strptime(api_date, "%Y-%m-%d").date(),  # Use the date as-is
-                            "asset_type": asset_type
-                        })
+                    if fetch_current_month_only:
+                        # Only process the last entry in the API response
+                        if api_data:
+                            last_entry = api_data[-1]  # Get the last data point
+                            api_date = last_entry["datetime"]
+                            fetched_data.append({
+                                "symbol": symbol,
+                                "price": float(last_entry["close"]),
+                                "date": datetime.strptime(api_date, "%Y-%m-%d").date(),  # Use the date as-is
+                                "asset_type": asset_type
+                            })
+                            log_message(f"Fetched data (current month only): {fetched_data[-1]}")
+                    else:
+                        # Process all entries in the API response
+                        for entry in api_data:
+                            api_date = entry["datetime"]
+                            fetched_data.append({
+                                "symbol": symbol,
+                                "price": float(entry["close"]),
+                                "date": datetime.strptime(api_date, "%Y-%m-%d").date(),  # Use the date as-is
+                                "asset_type": asset_type
+                            })
 
                     log_message(f"Successfully fetched historical data for symbol: {symbol}.")
+                    log_message(f"Fetched {len(fetched_data)} records for symbol: {symbol} from {range_start} to {range_end}.")
+                    for data in fetched_data:
+                        log_message(f"Fetched data: {data}")
                     break
                 except Exception as e:
                     if "429" in str(e):
@@ -153,11 +163,11 @@ def fetch_historical_market_data(symbols, asset_type, start_date, end_date):
     """
     Fetch historical market data for the given symbols, asset type, and date range.
     """
-    start_date, end_date = adjust_date_range(start_date, end_date)
+    start_date, end_date, fetch_current_month_only = adjust_date_range(start_date, end_date)
     existing_data_by_symbol = fetch_existing_data_ranges(symbols, asset_type)
     symbols_needing_update = determine_symbols_needing_update(symbols, asset_type, start_date, end_date, existing_data_by_symbol)
     log_message(f"Symbols and date ranges needing updates: {symbols_needing_update}")
-    return fetch_and_insert_data(symbols_needing_update, asset_type)
+    return fetch_and_insert_data(symbols_needing_update, asset_type, fetch_current_month_only)
 
 
 def publish_market_data_monthly_complete(symbols, asset_type, start_date, end_date, record_count):
