@@ -142,39 +142,58 @@ def publish_market_data_monthly_complete(symbols, asset_type, start_date, end_da
 
 def run(message_payload):
     """
-    Main function to fetch and update historical market data.
+    Main function to fetch and update historical market data for mixed asset types.
     """
     log_message("Starting fetch_historical_market_data job...")
     log_message(f"Received message payload: {message_payload}")
 
     # Extract the required fields from the message payload
     if isinstance(message_payload, dict):
-        symbols = message_payload.get("symbols")
-        asset_type = message_payload.get("asset_type")
+        assets = message_payload.get("assets")
         start_date = message_payload.get("start_date")
         end_date = message_payload.get("end_date")
     else:
-        log_message("Error: message_payload must be a dictionary with 'symbols', 'asset_type', 'start_date', and 'end_date' keys.")
+        log_message("Error: message_payload must be a dictionary with 'assets', 'start_date', and 'end_date' keys.")
         return
 
     # Validate the payload
-    if not symbols or not asset_type or not start_date or not end_date:
+    if not assets or not start_date or not end_date:
         log_message("Error: Missing required fields in message payload.")
         return
 
-    log_message(f"Received symbols: {symbols}, asset_type: {asset_type}, start_date: {start_date}, end_date: {end_date}")
+    log_message(f"Received assets: {assets}, start_date: {start_date}, end_date: {end_date}")
 
-    if not isinstance(symbols, list):
-        log_message("Error: symbols must be a list of strings.")
+    if not isinstance(assets, list):
+        log_message("Error: symbols must be a list of dictionaries with 'symbol' and 'asset_type' keys.")
         return
 
-    # Fetch historical market data
-    try:
-        data = fetch_historical_market_data(symbols, asset_type, start_date, end_date)
-        record_count = len(data)
+    # Group assets by asset type
+    assets_by_asset_type = {}
+    for item in assets:
+        if not isinstance(item, dict) or "symbol" not in item or "asset_type" not in item:
+            log_message(f"Invalid symbol entry: {item}. Skipping.")
+            continue
+        asset_type = item["asset_type"]
+        symbol = item["symbol"]
+        if asset_type not in assets_by_asset_type:
+            assets_by_asset_type[asset_type] = []
+        assets_by_asset_type[asset_type].append(symbol)
 
-        # Publish Kafka topic
-        publish_market_data_monthly_complete(symbols, asset_type, start_date, end_date, record_count)
+    log_message(f"Grouped assets by asset type: {assets_by_asset_type}")
+
+    # Process each asset type
+    try:
+        total_record_count = 0
+        for asset_type, asset_symbols in assets_by_asset_type.items():
+            log_message(f"Processing asset type: {asset_type} with symbols: {asset_symbols}")
+            data = fetch_historical_market_data(asset_symbols, asset_type, start_date, end_date)
+            record_count = len(data)
+            total_record_count += record_count
+
+            # Publish Kafka topic for each asset type
+            publish_market_data_monthly_complete(asset_symbols, asset_type, start_date, end_date, record_count)
+
+        log_message(f"Total records processed: {total_record_count}")
 
     except Exception as e:
         log_message(f"Error during fetch_historical_market_data job: {e}")
