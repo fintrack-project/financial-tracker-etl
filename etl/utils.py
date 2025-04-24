@@ -57,7 +57,7 @@ def load_env_variables(env_file=".env"):
         raise FileNotFoundError(f"{env_file} file not found.")
     return env_vars
 
-def quote_market_data(symbols, region="US"):
+def quote_market_index_data(symbols, region="US"):
     """
     Quote market data for the given symbols from Yahoo Finance via RapidAPI.
     """
@@ -95,6 +95,114 @@ def quote_market_data(symbols, region="US"):
 
     except requests.exceptions.RequestException as e:
         log_message(f"Error quoting market data: {e}")
+        raise
+
+def get_realtime_stock_data(symbol):
+    """
+    Fetch real-time stock data for the given symbol using Twelve Data API.
+    """
+    log_message(f"Fetching real-time stock data for symbol: {symbol}...")
+    api_host = os.getenv("TWELVE_DATA_API_HOST")
+    api_quote = os.getenv("TWELVE_DATA_API_QUOTE")
+    api_key = os.getenv("TWELVE_DATA_API_KEY")
+
+    if not api_host or not api_quote or not api_key:
+        raise ValueError("TWELVE_DATA_API_HOST, TWELVE_DATA_API_QUOTE, or TWELVE_DATA_API_KEY is not set. Check your .env file.")
+
+    params = {
+        "symbol": symbol,
+        "apikey": api_key,
+        "format": "JSON"
+    }
+
+    api_url = f"https://{api_host}{api_quote}"
+
+    try:
+        response = requests.get(api_url, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        # Validate response structure
+        if "close" not in data:
+            raise ValueError(f"Invalid API response format, there is not \"close\" for stock data: {data}")
+
+        log_message(f"Successfully fetched real-time stock data for symbol: {symbol}.")
+        return data
+
+    except requests.exceptions.RequestException as e:
+        log_message(f"Error fetching real-time stock data for symbol {symbol}: {e}")
+        raise
+
+def get_realtime_crypto_data(symbol, market="USD"):
+    """
+    Fetch real-time cryptocurrency data for the given symbol and market using Twelve Data API.
+    """
+    log_message(f"Fetching real-time cryptocurrency data for symbol: {symbol}, market: {market}...")
+    api_host = os.getenv("TWELVE_DATA_API_HOST")
+    api_quote = os.getenv("TWELVE_DATA_API_QUOTE")
+    api_key = os.getenv("TWELVE_DATA_API_KEY")
+
+    if not api_host or not api_quote or not api_key:
+        raise ValueError("TWELVE_DATA_API_HOST, TWELVE_DATA_API_QUOTE, or TWELVE_DATA_API_KEY is not set. Check your .env file.")
+
+    params = {
+        "symbol": f"{symbol}/{market}",
+        "apikey": api_key,
+        "format": "JSON"
+    }
+
+    api_url = f"https://{api_host}{api_quote}"
+
+    try:
+        response = requests.get(api_url, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        # Validate response structure
+        if "close" not in data:
+            raise ValueError(f"Invalid API response format, there is not \"close\" for cryptocurrency data: {data}")
+
+        log_message(f"Successfully fetched real-time cryptocurrency data for symbol: {symbol}.")
+        return data
+
+    except requests.exceptions.RequestException as e:
+        log_message(f"Error fetching real-time cryptocurrency data for symbol {symbol}: {e}")
+        raise
+
+def get_realtime_forex_data(from_symbol, to_symbol):
+    """
+    Fetch real-time forex data for the given currency pair using Twelve Data API.
+    """
+    log_message(f"Fetching real-time forex data for pair: {from_symbol}/{to_symbol}...")
+    api_host = os.getenv("TWELVE_DATA_API_HOST")
+    api_quote = os.getenv("TWELVE_DATA_API_QUOTE")
+    api_key = os.getenv("TWELVE_DATA_API_KEY")
+
+    if not api_host or not api_quote or not api_key:
+        raise ValueError("TWELVE_DATA_API_HOST, TWELVE_DATA_API_QUOTE, or TWELVE_DATA_API_KEY is not set. Check your .env file.")
+
+    params = {
+        "symbol": f"{from_symbol}/{to_symbol}",
+        "apikey": api_key,
+        "format": "JSON"
+    }
+
+    api_url = f"https://{api_host}{api_quote}"
+
+    try:
+        response = requests.get(api_url, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        # Validate response structure
+        if "close" not in data:
+            raise ValueError(f"Invalid API response format, there is not \"close\" for forex data: {data}")
+
+        log_message(f"Successfully fetched real-time forex data for pair: {from_symbol}/{to_symbol}.")
+        return data
+
+    except requests.exceptions.RequestException as e:
+        log_message(f"Error fetching real-time forex data for pair {from_symbol}/{to_symbol}: {e}")
         raise
 
 def get_historical_stock_data(symbol, start_date=None, end_date=None):

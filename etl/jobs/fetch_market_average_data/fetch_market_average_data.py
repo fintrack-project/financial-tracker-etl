@@ -1,7 +1,7 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 import pytz
 from dotenv import load_dotenv
-from etl.utils import get_db_connection, log_message, load_env_variables, quote_market_data, get_closest_us_market_closing_time
+from etl.utils import get_db_connection, log_message, load_env_variables, quote_market_index_data, get_closest_us_market_closing_time
 from main import publish_kafka_messages, ProducerKafkaTopics
 
 # Load environment variables from .env file
@@ -95,7 +95,7 @@ def save_market_data_to_db(data):
                 record['percent_change'],
                 record['price_high'],
                 record['price_low'],
-                datetime.now()
+                datetime.now(timezone.utc)
             ))
         connection.commit()
         log_message("Market average data saved successfully in the database.")
@@ -160,7 +160,7 @@ def run(message_payload):
         log_message("Market average data is not up-to-date. Quoting new data...")
 
         # Quote market data and process it if necessary
-        raw_data = quote_market_data(symbols)
+        raw_data = quote_market_index_data(symbols)
         processed_data = process_market_data(raw_data)
 
         # Save data to the database
