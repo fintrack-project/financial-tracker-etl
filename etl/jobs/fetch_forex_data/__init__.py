@@ -1,0 +1,1 @@
+from .fetch_forex_data import run
