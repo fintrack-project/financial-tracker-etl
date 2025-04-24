@@ -123,8 +123,8 @@ def get_realtime_stock_data(symbol):
         data = response.json()
 
         # Validate response structure
-        if "price" not in data:
-            raise ValueError(f"Invalid API response format for stock data: {data}")
+        if "close" not in data:
+            raise ValueError(f"Invalid API response format, there is not \"close\" for stock data: {data}")
 
         log_message(f"Successfully fetched real-time stock data for symbol: {symbol}.")
         return data
@@ -159,8 +159,8 @@ def get_realtime_crypto_data(symbol, market="USD"):
         data = response.json()
 
         # Validate response structure
-        if "price" not in data:
-            raise ValueError(f"Invalid API response format for cryptocurrency data: {data}")
+        if "close" not in data:
+            raise ValueError(f"Invalid API response format, there is not \"close\" for cryptocurrency data: {data}")
 
         log_message(f"Successfully fetched real-time cryptocurrency data for symbol: {symbol}.")
         return data
@@ -195,8 +195,8 @@ def get_realtime_forex_data(from_symbol, to_symbol):
         data = response.json()
 
         # Validate response structure
-        if "price" not in data:
-            raise ValueError(f"Invalid API response format for forex data: {data}")
+        if "close" not in data:
+            raise ValueError(f"Invalid API response format, there is not \"close\" for forex data: {data}")
 
         log_message(f"Successfully fetched real-time forex data for pair: {from_symbol}/{to_symbol}.")
         return data

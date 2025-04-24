@@ -441,3 +441,283 @@
 2025-04-24 15:36:30,850 - INFO - Validating assets against the holdings table...
 2025-04-24 15:36:30,850 - INFO - Assets to validate: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}, {'symbol': 'INVALID', 'asset_type': 'STOCK'}]
 2025-04-24 15:36:30,850 - INFO - Warning: The following symbols do not exist in the holdings table and will be ignored: {'INVALID'}
+2025-04-24 17:20:42,556 - INFO - Running fetch_market_average_data job...
+2025-04-24 17:20:42,557 - INFO - Received message payload: {'symbols': ['^GSPC', '^NDX']}
+2025-04-24 17:20:42,557 - INFO - Received symbols: ['^GSPC', '^NDX']
+2025-04-24 17:20:42,557 - INFO - Starting fetch_market_average_data job...
+2025-04-24 17:20:42,557 - INFO - Closest US market closing time in UTC: 2025-04-16 20:00:00
+2025-04-24 17:20:42,557 - INFO - All market average data is up-to-date. Using existing data.
+2025-04-24 17:20:42,557 - INFO - Starting fetch_and_insert_data process...
+2025-04-24 17:20:42,557 - INFO - fetch_and_insert_data process completed.
+2025-04-24 17:20:42,559 - INFO - Fetching real-time price for symbol: AAPL, asset_type: STOCK...
+2025-04-24 17:20:42,559 - INFO - API response for symbol AAPL: {'symbol': 'AAPL', 'name': 'Apple Inc.', 'exchange': 'NASDAQ', 'mic_code': 'XNGS', 'currency': 'USD', 'datetime': '2025-04-23', 'timestamp': 1745415000, 'last_quote_at': 1745415000, 'open': '206', 'high': '208', 'low': '202.80000', 'close': '204.60001', 'volume': '52863100', 'previous_close': '199.74001', 'change': '4.86000', 'percent_change': '2.43316', 'average_volume': '81005730', 'is_market_open': False, 'fifty_two_week': {'low': '164.92000', 'high': '260.10001', 'low_change': '39.68001', 'high_change': '-55.50000', 'low_change_percent': '24.060155', 'high_change_percent': '-21.33795', 'range': '164.919998 - 260.100006'}}
+2025-04-24 17:20:42,559 - INFO - Fetching real-time price for symbol: BTC, asset_type: UNKNOWN...
+2025-04-24 17:20:42,559 - INFO - Unsupported asset type: UNKNOWN for symbol: BTC. Skipping.
+2025-04-24 17:20:42,560 - INFO - Fetching assets that need price updates...
+2025-04-24 17:20:42,560 - INFO - Most recent US market closing time in UTC: 2025-04-16 20:00:00
+2025-04-24 17:20:42,560 - INFO - Found 2 symbols needing updates.
+2025-04-24 17:20:42,561 - INFO - Successfully inserted or updated data for symbol: AAPL.
+2025-04-24 17:20:42,561 - INFO - Validating required fields : ['timestamp', 'close', 'percent_change']
+2025-04-24 17:20:42,561 - INFO - All required fields are present in the API response for symbol AAPL.
+2025-04-24 17:20:42,561 - INFO - Extracted data for symbol AAPL: timestamp=1745415000, price=204.60001, percent_change=2.43316
+2025-04-24 17:20:42,561 - INFO - Validating required fields : ['timestamp', 'close', 'percent_change']
+2025-04-24 17:20:42,561 - INFO - Starting update_market_data job...
+2025-04-24 17:20:42,561 - INFO - Received message payload: {'assets': [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]}
+2025-04-24 17:20:42,561 - INFO - Received assets: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:20:42,561 - INFO - Assets needing updates: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:20:42,562 - INFO - update_market_data job completed successfully.
+2025-04-24 17:20:42,562 - INFO - Starting update_market_data job...
+2025-04-24 17:20:42,562 - INFO - Received message payload: INVALID_INPUT
+2025-04-24 17:20:42,562 - INFO - Error: message_payload must be a dictionary with an 'assets' key.
+2025-04-24 17:20:42,562 - INFO - Starting update_market_data job...
+2025-04-24 17:20:42,562 - INFO - Received message payload: {'assets': [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]}
+2025-04-24 17:20:42,562 - INFO - Received assets: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:20:42,562 - INFO - No assets need updates. Exiting job.
+2025-04-24 17:20:42,563 - INFO - update_market_data job completed successfully.
+2025-04-24 17:20:42,563 - INFO - Starting update_market_data job...
+2025-04-24 17:20:42,563 - INFO - Received message payload: {'assets': [{'symbol': 'INVALID', 'asset_type': 'STOCK'}]}
+2025-04-24 17:20:42,563 - INFO - Received assets: [{'symbol': 'INVALID', 'asset_type': 'STOCK'}]
+2025-04-24 17:20:42,563 - INFO - No valid assets found. Exiting job.
+2025-04-24 17:20:42,563 - INFO - Validating assets against the holdings table...
+2025-04-24 17:20:42,563 - INFO - Assets to validate: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}, {'symbol': 'INVALID', 'asset_type': 'STOCK'}]
+2025-04-24 17:20:42,563 - INFO - Warning: The following symbols do not exist in the holdings table and will be ignored: {'INVALID'}
+2025-04-24 17:22:52,392 - INFO - Running fetch_market_average_data job...
+2025-04-24 17:22:52,392 - INFO - Received message payload: {'symbols': ['^GSPC', '^NDX']}
+2025-04-24 17:22:52,392 - INFO - Received symbols: ['^GSPC', '^NDX']
+2025-04-24 17:22:52,392 - INFO - Starting fetch_market_average_data job...
+2025-04-24 17:22:52,392 - INFO - Closest US market closing time in UTC: 2025-04-16 20:00:00
+2025-04-24 17:22:52,392 - INFO - All market average data is up-to-date. Using existing data.
+2025-04-24 17:22:52,393 - INFO - Starting fetch_and_insert_data process...
+2025-04-24 17:22:52,393 - INFO - fetch_and_insert_data process completed.
+2025-04-24 17:22:52,395 - INFO - Fetching real-time price for symbol: AAPL, asset_type: STOCK...
+2025-04-24 17:22:52,395 - INFO - API response for symbol AAPL: {'symbol': 'AAPL', 'name': 'Apple Inc.', 'exchange': 'NASDAQ', 'mic_code': 'XNGS', 'currency': 'USD', 'datetime': '2025-04-23', 'timestamp': 1745415000, 'last_quote_at': 1745415000, 'open': '206', 'high': '208', 'low': '202.80000', 'close': '204.60001', 'volume': '52863100', 'previous_close': '199.74001', 'change': '4.86000', 'percent_change': '2.43316', 'average_volume': '81005730', 'is_market_open': False, 'fifty_two_week': {'low': '164.92000', 'high': '260.10001', 'low_change': '39.68001', 'high_change': '-55.50000', 'low_change_percent': '24.060155', 'high_change_percent': '-21.33795', 'range': '164.919998 - 260.100006'}}
+2025-04-24 17:22:52,395 - INFO - Fetching real-time price for symbol: BTC, asset_type: UNKNOWN...
+2025-04-24 17:22:52,395 - INFO - Unsupported asset type: UNKNOWN for symbol: BTC. Skipping.
+2025-04-24 17:22:52,396 - INFO - Fetching assets that need price updates...
+2025-04-24 17:22:52,396 - INFO - Most recent US market closing time in UTC: 2025-04-16 20:00:00
+2025-04-24 17:22:52,396 - INFO - Found 2 symbols needing updates.
+2025-04-24 17:22:52,396 - INFO - Successfully inserted or updated data for symbol: AAPL.
+2025-04-24 17:22:52,397 - INFO - Validating required fields : ['timestamp', 'close', 'percent_change']
+2025-04-24 17:22:52,397 - INFO - All required fields are present in the API response for symbol AAPL.
+2025-04-24 17:22:52,397 - INFO - Extracted data for symbol AAPL: timestamp=1745415000, price=204.60001, percent_change=2.43316
+2025-04-24 17:22:52,397 - INFO - Validating required fields : ['timestamp', 'close', 'percent_change']
+2025-04-24 17:22:52,397 - INFO - Starting update_market_data job...
+2025-04-24 17:22:52,397 - INFO - Received message payload: {'assets': [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]}
+2025-04-24 17:22:52,397 - INFO - Received assets: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:22:52,397 - INFO - Assets needing updates: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:22:52,397 - INFO - update_market_data job completed successfully.
+2025-04-24 17:22:52,397 - INFO - Starting update_market_data job...
+2025-04-24 17:22:52,397 - INFO - Received message payload: INVALID_INPUT
+2025-04-24 17:22:52,397 - INFO - Error: message_payload must be a dictionary with an 'assets' key.
+2025-04-24 17:22:52,398 - INFO - Starting update_market_data job...
+2025-04-24 17:22:52,398 - INFO - Received message payload: {'assets': [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]}
+2025-04-24 17:22:52,398 - INFO - Received assets: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:22:52,398 - INFO - No assets need updates. Exiting job.
+2025-04-24 17:22:52,398 - INFO - update_market_data job completed successfully.
+2025-04-24 17:22:52,398 - INFO - Starting update_market_data job...
+2025-04-24 17:22:52,398 - INFO - Received message payload: {'assets': [{'symbol': 'INVALID', 'asset_type': 'STOCK'}]}
+2025-04-24 17:22:52,398 - INFO - Received assets: [{'symbol': 'INVALID', 'asset_type': 'STOCK'}]
+2025-04-24 17:22:52,398 - INFO - No valid assets found. Exiting job.
+2025-04-24 17:22:52,399 - INFO - Validating assets against the holdings table...
+2025-04-24 17:22:52,399 - INFO - Assets to validate: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}, {'symbol': 'INVALID', 'asset_type': 'STOCK'}]
+2025-04-24 17:22:52,399 - INFO - Warning: The following symbols do not exist in the holdings table and will be ignored: {'INVALID'}
+2025-04-24 17:26:01,868 - INFO - Running fetch_market_average_data job...
+2025-04-24 17:26:01,868 - INFO - Received message payload: {'symbols': ['^GSPC', '^NDX']}
+2025-04-24 17:26:01,868 - INFO - Received symbols: ['^GSPC', '^NDX']
+2025-04-24 17:26:01,868 - INFO - Starting fetch_market_average_data job...
+2025-04-24 17:26:01,868 - INFO - Closest US market closing time in UTC: 2025-04-16 20:00:00
+2025-04-24 17:26:01,868 - INFO - All market average data is up-to-date. Using existing data.
+2025-04-24 17:26:01,869 - INFO - Starting fetch_and_insert_data process...
+2025-04-24 17:26:01,869 - INFO - fetch_and_insert_data process completed.
+2025-04-24 17:26:01,871 - INFO - Fetching real-time price for symbol: AAPL, asset_type: STOCK...
+2025-04-24 17:26:01,871 - INFO - API response for symbol AAPL: {'symbol': 'AAPL', 'name': 'Apple Inc.', 'exchange': 'NASDAQ', 'mic_code': 'XNGS', 'currency': 'USD', 'datetime': '2025-04-23', 'timestamp': 1745415000, 'last_quote_at': 1745415000, 'open': '206', 'high': '208', 'low': '202.80000', 'close': '204.60001', 'volume': '52863100', 'previous_close': '199.74001', 'change': '4.86000', 'percent_change': '2.43316', 'average_volume': '81005730', 'is_market_open': False, 'fifty_two_week': {'low': '164.92000', 'high': '260.10001', 'low_change': '39.68001', 'high_change': '-55.50000', 'low_change_percent': '24.060155', 'high_change_percent': '-21.33795', 'range': '164.919998 - 260.100006'}}
+2025-04-24 17:26:01,871 - INFO - Fetching real-time price for symbol: BTC, asset_type: UNKNOWN...
+2025-04-24 17:26:01,871 - INFO - Unsupported asset type: UNKNOWN for symbol: BTC. Skipping.
+2025-04-24 17:26:01,872 - INFO - Fetching assets that need price updates...
+2025-04-24 17:26:01,872 - INFO - Most recent US market closing time in UTC: 2025-04-16 20:00:00
+2025-04-24 17:26:01,872 - INFO - Found 2 symbols needing updates.
+2025-04-24 17:26:01,873 - INFO - Successfully inserted or updated data for symbol: AAPL.
+2025-04-24 17:26:01,873 - INFO - Validating required fields : ['timestamp', 'close', 'percent_change']
+2025-04-24 17:26:01,873 - INFO - All required fields are present in the API response for symbol AAPL.
+2025-04-24 17:26:01,873 - INFO - Extracted data for symbol AAPL: timestamp=1745415000, price=204.60001, percent_change=2.43316
+2025-04-24 17:26:01,873 - INFO - Validating required fields : ['timestamp', 'close', 'percent_change']
+2025-04-24 17:26:01,873 - INFO - Starting update_market_data job...
+2025-04-24 17:26:01,873 - INFO - Received message payload: {'assets': [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]}
+2025-04-24 17:26:01,873 - INFO - Received assets: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:26:01,873 - INFO - Assets needing updates: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:26:01,874 - INFO - update_market_data job completed successfully.
+2025-04-24 17:26:01,875 - INFO - Starting update_market_data job...
+2025-04-24 17:26:01,875 - INFO - Received message payload: INVALID_INPUT
+2025-04-24 17:26:01,875 - INFO - Error: message_payload must be a dictionary with an 'assets' key.
+2025-04-24 17:26:01,875 - INFO - Starting update_market_data job...
+2025-04-24 17:26:01,875 - INFO - Received message payload: {'assets': [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]}
+2025-04-24 17:26:01,875 - INFO - Received assets: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:26:01,875 - INFO - No assets need updates. Exiting job.
+2025-04-24 17:26:01,875 - INFO - update_market_data job completed successfully.
+2025-04-24 17:26:01,876 - INFO - Starting update_market_data job...
+2025-04-24 17:26:01,876 - INFO - Received message payload: {'assets': [{'symbol': 'INVALID', 'asset_type': 'STOCK'}]}
+2025-04-24 17:26:01,876 - INFO - Received assets: [{'symbol': 'INVALID', 'asset_type': 'STOCK'}]
+2025-04-24 17:26:01,876 - INFO - No valid assets found. Exiting job.
+2025-04-24 17:26:01,876 - INFO - Validating assets against the holdings table...
+2025-04-24 17:26:01,876 - INFO - Assets to validate: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}, {'symbol': 'INVALID', 'asset_type': 'STOCK'}]
+2025-04-24 17:26:01,876 - INFO - Warning: The following symbols do not exist in the holdings table and will be ignored: {'INVALID'}
+2025-04-24 17:26:08,582 - INFO - Running fetch_market_average_data job...
+2025-04-24 17:26:08,582 - INFO - Received message payload: {'symbols': ['^GSPC', '^NDX']}
+2025-04-24 17:26:08,582 - INFO - Received symbols: ['^GSPC', '^NDX']
+2025-04-24 17:26:08,582 - INFO - Starting fetch_market_average_data job...
+2025-04-24 17:26:08,582 - INFO - Closest US market closing time in UTC: 2025-04-16 20:00:00
+2025-04-24 17:26:08,582 - INFO - All market average data is up-to-date. Using existing data.
+2025-04-24 17:26:08,582 - INFO - Starting fetch_and_insert_data process...
+2025-04-24 17:26:08,583 - INFO - fetch_and_insert_data process completed.
+2025-04-24 17:26:08,584 - INFO - Fetching real-time price for symbol: AAPL, asset_type: STOCK...
+2025-04-24 17:26:08,584 - INFO - API response for symbol AAPL: {'symbol': 'AAPL', 'name': 'Apple Inc.', 'exchange': 'NASDAQ', 'mic_code': 'XNGS', 'currency': 'USD', 'datetime': '2025-04-23', 'timestamp': 1745415000, 'last_quote_at': 1745415000, 'open': '206', 'high': '208', 'low': '202.80000', 'close': '204.60001', 'volume': '52863100', 'previous_close': '199.74001', 'change': '4.86000', 'percent_change': '2.43316', 'average_volume': '81005730', 'is_market_open': False, 'fifty_two_week': {'low': '164.92000', 'high': '260.10001', 'low_change': '39.68001', 'high_change': '-55.50000', 'low_change_percent': '24.060155', 'high_change_percent': '-21.33795', 'range': '164.919998 - 260.100006'}}
+2025-04-24 17:26:08,584 - INFO - Fetching real-time price for symbol: BTC, asset_type: UNKNOWN...
+2025-04-24 17:26:08,584 - INFO - Unsupported asset type: UNKNOWN for symbol: BTC. Skipping.
+2025-04-24 17:26:08,585 - INFO - Fetching assets that need price updates...
+2025-04-24 17:26:08,585 - INFO - Most recent US market closing time in UTC: 2025-04-16 20:00:00
+2025-04-24 17:26:08,585 - INFO - Found 2 symbols needing updates.
+2025-04-24 17:26:08,585 - INFO - Successfully inserted or updated data for symbol: AAPL.
+2025-04-24 17:26:08,585 - INFO - Validating required fields : ['timestamp', 'close', 'percent_change']
+2025-04-24 17:26:08,585 - INFO - All required fields are present in the API response for symbol AAPL.
+2025-04-24 17:26:08,585 - INFO - Extracted data for symbol AAPL: timestamp=1745415000, price=204.60001, percent_change=2.43316
+2025-04-24 17:26:08,585 - INFO - Validating required fields : ['timestamp', 'close', 'percent_change']
+2025-04-24 17:26:08,586 - INFO - Starting update_market_data job...
+2025-04-24 17:26:08,586 - INFO - Received message payload: {'assets': [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]}
+2025-04-24 17:26:08,586 - INFO - Received assets: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:26:08,586 - INFO - Assets needing updates: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:26:08,586 - INFO - update_market_data job completed successfully.
+2025-04-24 17:26:08,586 - INFO - Starting update_market_data job...
+2025-04-24 17:26:08,586 - INFO - Received message payload: INVALID_INPUT
+2025-04-24 17:26:08,586 - INFO - Error: message_payload must be a dictionary with an 'assets' key.
+2025-04-24 17:26:08,586 - INFO - Starting update_market_data job...
+2025-04-24 17:26:08,586 - INFO - Received message payload: {'assets': [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]}
+2025-04-24 17:26:08,586 - INFO - Received assets: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:26:08,587 - INFO - No assets need updates. Exiting job.
+2025-04-24 17:26:08,587 - INFO - update_market_data job completed successfully.
+2025-04-24 17:26:08,587 - INFO - Starting update_market_data job...
+2025-04-24 17:26:08,587 - INFO - Received message payload: {'assets': [{'symbol': 'INVALID', 'asset_type': 'STOCK'}]}
+2025-04-24 17:26:08,587 - INFO - Received assets: [{'symbol': 'INVALID', 'asset_type': 'STOCK'}]
+2025-04-24 17:26:08,587 - INFO - No valid assets found. Exiting job.
+2025-04-24 17:26:08,587 - INFO - Validating assets against the holdings table...
+2025-04-24 17:26:08,587 - INFO - Assets to validate: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}, {'symbol': 'INVALID', 'asset_type': 'STOCK'}]
+2025-04-24 17:26:08,587 - INFO - Warning: The following symbols do not exist in the holdings table and will be ignored: {'INVALID'}
+2025-04-24 17:30:27,564 - INFO - Running fetch_market_average_data job...
+2025-04-24 17:30:27,565 - INFO - Received message payload: {'symbols': ['^GSPC', '^NDX']}
+2025-04-24 17:30:27,565 - INFO - Received symbols: ['^GSPC', '^NDX']
+2025-04-24 17:30:27,565 - INFO - Starting fetch_market_average_data job...
+2025-04-24 17:30:27,565 - INFO - Closest US market closing time in UTC: 2025-04-16 20:00:00
+2025-04-24 17:30:27,565 - INFO - All market average data is up-to-date. Using existing data.
+2025-04-24 17:30:27,565 - INFO - Starting fetch_and_insert_data process...
+2025-04-24 17:30:27,565 - INFO - fetch_and_insert_data process completed.
+2025-04-24 17:30:27,567 - INFO - Fetching real-time price for symbol: AAPL, asset_type: STOCK...
+2025-04-24 17:30:27,567 - INFO - API response for symbol AAPL: {'symbol': 'AAPL', 'name': 'Apple Inc.', 'exchange': 'NASDAQ', 'mic_code': 'XNGS', 'currency': 'USD', 'datetime': '2025-04-23', 'timestamp': 1745415000, 'last_quote_at': 1745415000, 'open': '206', 'high': '208', 'low': '202.80000', 'close': '204.60001', 'volume': '52863100', 'previous_close': '199.74001', 'change': '4.86000', 'percent_change': '2.43316', 'average_volume': '81005730', 'is_market_open': False, 'fifty_two_week': {'low': '164.92000', 'high': '260.10001', 'low_change': '39.68001', 'high_change': '-55.50000', 'low_change_percent': '24.060155', 'high_change_percent': '-21.33795', 'range': '164.919998 - 260.100006'}}
+2025-04-24 17:30:27,568 - INFO - Fetching real-time price for symbol: BTC, asset_type: UNKNOWN...
+2025-04-24 17:30:27,568 - INFO - Unsupported asset type: UNKNOWN for symbol: BTC. Skipping.
+2025-04-24 17:30:27,568 - INFO - Fetching assets that need price updates...
+2025-04-24 17:30:27,568 - INFO - Most recent US market closing time in UTC: 2025-04-16 20:00:00
+2025-04-24 17:30:27,568 - INFO - Found 2 symbols needing updates.
+2025-04-24 17:30:27,569 - INFO - Successfully inserted or updated data for symbol: AAPL.
+2025-04-24 17:30:27,569 - INFO - Validating required fields : ['timestamp', 'close', 'percent_change']
+2025-04-24 17:30:27,569 - INFO - All required fields are present in the API response for symbol AAPL.
+2025-04-24 17:30:27,569 - INFO - Extracted data for symbol AAPL: timestamp=1745415000, price=204.60001, percent_change=2.43316
+2025-04-24 17:30:27,569 - INFO - Validating required fields : ['timestamp', 'close', 'percent_change']
+2025-04-24 17:30:27,569 - INFO - Starting update_market_data job...
+2025-04-24 17:30:27,569 - INFO - Received message payload: {'assets': [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]}
+2025-04-24 17:30:27,569 - INFO - Received assets: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:30:27,569 - INFO - Assets needing updates: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:30:27,569 - INFO - update_market_data job completed successfully.
+2025-04-24 17:30:27,570 - INFO - Starting update_market_data job...
+2025-04-24 17:30:27,570 - INFO - Received message payload: INVALID_INPUT
+2025-04-24 17:30:27,570 - INFO - Error: message_payload must be a dictionary with an 'assets' key.
+2025-04-24 17:30:27,571 - INFO - Starting update_market_data job...
+2025-04-24 17:30:27,571 - INFO - Received message payload: {'assets': [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]}
+2025-04-24 17:30:27,571 - INFO - Received assets: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:30:27,571 - INFO - No assets need updates. Exiting job.
+2025-04-24 17:30:27,571 - INFO - update_market_data job completed successfully.
+2025-04-24 17:30:27,571 - INFO - Starting update_market_data job...
+2025-04-24 17:30:27,571 - INFO - Received message payload: {'assets': [{'symbol': 'INVALID', 'asset_type': 'STOCK'}]}
+2025-04-24 17:30:27,571 - INFO - Received assets: [{'symbol': 'INVALID', 'asset_type': 'STOCK'}]
+2025-04-24 17:30:27,571 - INFO - No valid assets found. Exiting job.
+2025-04-24 17:30:27,571 - INFO - Validating assets against the holdings table...
+2025-04-24 17:30:27,571 - INFO - Assets to validate: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}, {'symbol': 'INVALID', 'asset_type': 'STOCK'}]
+2025-04-24 17:30:27,571 - INFO - Warning: The following symbols do not exist in the holdings table and will be ignored: {'INVALID'}
+2025-04-24 17:31:39,648 - INFO - Running fetch_market_average_data job...
+2025-04-24 17:31:39,648 - INFO - Received message payload: {'symbols': ['^GSPC', '^NDX']}
+2025-04-24 17:31:39,648 - INFO - Received symbols: ['^GSPC', '^NDX']
+2025-04-24 17:31:39,648 - INFO - Starting fetch_market_average_data job...
+2025-04-24 17:31:39,648 - INFO - Closest US market closing time in UTC: 2025-04-16 20:00:00
+2025-04-24 17:31:39,648 - INFO - All market average data is up-to-date. Using existing data.
+2025-04-24 17:31:39,649 - INFO - Starting fetch_and_insert_data process...
+2025-04-24 17:31:39,649 - INFO - fetch_and_insert_data process completed.
+2025-04-24 17:31:39,651 - INFO - Fetching real-time price for symbol: AAPL, asset_type: STOCK...
+2025-04-24 17:31:39,651 - INFO - API response for symbol AAPL: {'symbol': 'AAPL', 'name': 'Apple Inc.', 'exchange': 'NASDAQ', 'mic_code': 'XNGS', 'currency': 'USD', 'datetime': '2025-04-23', 'timestamp': 1745415000, 'last_quote_at': 1745415000, 'open': '206', 'high': '208', 'low': '202.80000', 'close': '204.60001', 'volume': '52863100', 'previous_close': '199.74001', 'change': '4.86000', 'percent_change': '2.43316', 'average_volume': '81005730', 'is_market_open': False, 'fifty_two_week': {'low': '164.92000', 'high': '260.10001', 'low_change': '39.68001', 'high_change': '-55.50000', 'low_change_percent': '24.060155', 'high_change_percent': '-21.33795', 'range': '164.919998 - 260.100006'}}
+2025-04-24 17:31:39,651 - INFO - Fetching real-time price for symbol: BTC, asset_type: UNKNOWN...
+2025-04-24 17:31:39,651 - INFO - Unsupported asset type: UNKNOWN for symbol: BTC. Skipping.
+2025-04-24 17:31:39,652 - INFO - Fetching assets that need price updates...
+2025-04-24 17:31:39,652 - INFO - Most recent US market closing time in UTC: 2025-04-16 20:00:00
+2025-04-24 17:31:39,652 - INFO - Found 2 symbols needing updates.
+2025-04-24 17:31:39,653 - INFO - Successfully inserted or updated data for symbol: AAPL.
+2025-04-24 17:31:39,653 - INFO - Validating required fields : ['timestamp', 'close', 'percent_change']
+2025-04-24 17:31:39,653 - INFO - All required fields are present in the API response for symbol AAPL.
+2025-04-24 17:31:39,653 - INFO - Extracted data for symbol AAPL: timestamp=1745415000, price=204.60001, percent_change=2.43316
+2025-04-24 17:31:39,653 - INFO - Validating required fields : ['timestamp', 'close', 'percent_change']
+2025-04-24 17:31:39,653 - INFO - Starting update_market_data job...
+2025-04-24 17:31:39,653 - INFO - Received message payload: {'assets': [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]}
+2025-04-24 17:31:39,653 - INFO - Received assets: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:31:39,653 - INFO - Assets needing updates: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:31:39,653 - INFO - update_market_data job completed successfully.
+2025-04-24 17:31:39,654 - INFO - Starting update_market_data job...
+2025-04-24 17:31:39,654 - INFO - Received message payload: INVALID_INPUT
+2025-04-24 17:31:39,654 - INFO - Error: message_payload must be a dictionary with an 'assets' key.
+2025-04-24 17:31:39,654 - INFO - Starting update_market_data job...
+2025-04-24 17:31:39,654 - INFO - Received message payload: {'assets': [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]}
+2025-04-24 17:31:39,654 - INFO - Received assets: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:31:39,654 - INFO - No assets need updates. Exiting job.
+2025-04-24 17:31:39,654 - INFO - update_market_data job completed successfully.
+2025-04-24 17:31:39,655 - INFO - Starting update_market_data job...
+2025-04-24 17:31:39,655 - INFO - Received message payload: {'assets': [{'symbol': 'INVALID', 'asset_type': 'STOCK'}]}
+2025-04-24 17:31:39,655 - INFO - Received assets: [{'symbol': 'INVALID', 'asset_type': 'STOCK'}]
+2025-04-24 17:31:39,655 - INFO - No valid assets found. Exiting job.
+2025-04-24 17:31:39,655 - INFO - Validating assets against the holdings table...
+2025-04-24 17:31:39,655 - INFO - Assets to validate: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}, {'symbol': 'INVALID', 'asset_type': 'STOCK'}]
+2025-04-24 17:31:39,655 - INFO - Warning: The following symbols do not exist in the holdings table and will be ignored: {'INVALID'}
+2025-04-24 17:33:10,640 - INFO - Running fetch_market_average_data job...
+2025-04-24 17:33:10,640 - INFO - Received message payload: {'symbols': ['^GSPC', '^NDX']}
+2025-04-24 17:33:10,641 - INFO - Received symbols: ['^GSPC', '^NDX']
+2025-04-24 17:33:10,641 - INFO - Starting fetch_market_average_data job...
+2025-04-24 17:33:10,641 - INFO - Closest US market closing time in UTC: 2025-04-16 20:00:00
+2025-04-24 17:33:10,641 - INFO - All market average data is up-to-date. Using existing data.
+2025-04-24 17:33:10,641 - INFO - Starting fetch_and_insert_data process...
+2025-04-24 17:33:10,641 - INFO - fetch_and_insert_data process completed.
+2025-04-24 17:33:10,642 - INFO - Fetching real-time price for symbol: AAPL, asset_type: STOCK...
+2025-04-24 17:33:10,642 - INFO - API response for symbol AAPL: {'symbol': 'AAPL', 'name': 'Apple Inc.', 'exchange': 'NASDAQ', 'mic_code': 'XNGS', 'currency': 'USD', 'datetime': '2025-04-23', 'timestamp': 1745415000, 'last_quote_at': 1745415000, 'open': '206', 'high': '208', 'low': '202.80000', 'close': '204.60001', 'volume': '52863100', 'previous_close': '199.74001', 'change': '4.86000', 'percent_change': '2.43316', 'average_volume': '81005730', 'is_market_open': False, 'fifty_two_week': {'low': '164.92000', 'high': '260.10001', 'low_change': '39.68001', 'high_change': '-55.50000', 'low_change_percent': '24.060155', 'high_change_percent': '-21.33795', 'range': '164.919998 - 260.100006'}}
+2025-04-24 17:33:10,642 - INFO - Fetching real-time price for symbol: BTC, asset_type: UNKNOWN...
+2025-04-24 17:33:10,642 - INFO - Unsupported asset type: UNKNOWN for symbol: BTC. Skipping.
+2025-04-24 17:33:10,642 - INFO - Fetching assets that need price updates...
+2025-04-24 17:33:10,642 - INFO - Most recent US market closing time in UTC: 2025-04-16 20:00:00
+2025-04-24 17:33:10,643 - INFO - Found 2 symbols needing updates.
+2025-04-24 17:33:10,643 - INFO - Successfully inserted or updated data for symbol: AAPL.
+2025-04-24 17:33:10,643 - INFO - Validating required fields : ['timestamp', 'close', 'percent_change']
+2025-04-24 17:33:10,643 - INFO - All required fields are present in the API response for symbol AAPL.
+2025-04-24 17:33:10,643 - INFO - Extracted data for symbol AAPL: timestamp=1745415000, price=204.60001, percent_change=2.43316
+2025-04-24 17:33:10,643 - INFO - Validating required fields : ['timestamp', 'close', 'percent_change']
+2025-04-24 17:33:10,644 - INFO - Starting update_market_data job...
+2025-04-24 17:33:10,644 - INFO - Received message payload: {'assets': [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]}
+2025-04-24 17:33:10,644 - INFO - Received assets: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:33:10,644 - INFO - Assets needing updates: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:33:10,644 - INFO - update_market_data job completed successfully.
+2025-04-24 17:33:10,644 - INFO - Starting update_market_data job...
+2025-04-24 17:33:10,644 - INFO - Received message payload: INVALID_INPUT
+2025-04-24 17:33:10,644 - INFO - Error: message_payload must be a dictionary with an 'assets' key.
+2025-04-24 17:33:10,644 - INFO - Starting update_market_data job...
+2025-04-24 17:33:10,644 - INFO - Received message payload: {'assets': [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]}
+2025-04-24 17:33:10,644 - INFO - Received assets: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 17:33:10,644 - INFO - No assets need updates. Exiting job.
+2025-04-24 17:33:10,644 - INFO - update_market_data job completed successfully.
+2025-04-24 17:33:10,645 - INFO - Starting update_market_data job...
+2025-04-24 17:33:10,645 - INFO - Received message payload: {'assets': [{'symbol': 'INVALID', 'asset_type': 'STOCK'}]}
+2025-04-24 17:33:10,645 - INFO - Received assets: [{'symbol': 'INVALID', 'asset_type': 'STOCK'}]
+2025-04-24 17:33:10,645 - INFO - No valid assets found. Exiting job.
+2025-04-24 17:33:10,645 - INFO - Validating assets against the holdings table...
+2025-04-24 17:33:10,645 - INFO - Assets to validate: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}, {'symbol': 'INVALID', 'asset_type': 'STOCK'}]
+2025-04-24 17:33:10,645 - INFO - Warning: The following symbols do not exist in the holdings table and will be ignored: {'INVALID'}

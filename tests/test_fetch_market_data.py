@@ -4,9 +4,13 @@ from datetime import datetime
 from etl.jobs.fetch_market_data.fetch_market_data import (
     validate_assets,
     get_assets_needing_update,
+    fetch_data,
+    process_data,
+    insert_or_update_data,
     fetch_and_insert_data,
     run
 )
+from tests.test_utils.mock_responses import get_mock_api_response
 
 class TestFetchMarketData(unittest.TestCase):
 
@@ -110,6 +114,133 @@ class TestFetchMarketData(unittest.TestCase):
             [{"symbol": "AAPL", "asset_type": "STOCK"}, {"symbol": "TSLA", "asset_type": "STOCK"}],
             []
         )
+
+    @patch("etl.jobs.fetch_market_data.fetch_market_data.get_realtime_stock_data")
+    def test_fetch_data(self, mock_get_realtime_stock_data):
+        # Mock the API response
+        mock_get_realtime_stock_data.side_effect = get_mock_api_response
+
+        # Test fetching data for a valid stock
+        asset = {"symbol": "AAPL", "asset_type": "STOCK"}
+        data = fetch_data(asset)
+        self.assertEqual(data["symbol"], "AAPL")
+        self.assertEqual(data["close"], "204.60001")
+
+        # Test fetching data for an unsupported asset type
+        asset = {"symbol": "BTC", "asset_type": "UNKNOWN"}
+        data = fetch_data(asset)
+        self.assertIsNone(data)
+
+    def test_process_data(self):
+        # Mock API response
+        data = get_mock_api_response("AAPL")
+        symbol = "AAPL"
+
+        # Test processing valid data
+        timestamp, price, percent_change = process_data(data, symbol)
+        self.assertEqual(timestamp, 1745415000)
+        self.assertEqual(price, 204.60001)
+        self.assertEqual(percent_change, 2.43316)
+
+        # Test processing invalid data (missing field)
+        data.pop("close")
+        with self.assertRaises(ValueError) as context:
+            process_data(data, symbol)
+        self.assertIn("Missing or invalid field 'close'", str(context.exception))
+
+    @patch("etl.jobs.fetch_market_data.fetch_market_data.get_db_connection")
+    def test_insert_or_update_data(self, mock_get_db_connection):
+        # Mock the database connection and cursor
+        mock_connection = MagicMock()
+        mock_cursor = MagicMock()
+        mock_get_db_connection.return_value = mock_connection
+        mock_connection.cursor.return_value = mock_cursor
+    
+        # Test inserting or updating data
+        insert_or_update_data(
+            cursor=mock_cursor,
+            connection=mock_connection,
+            symbol="AAPL",
+            asset_type="STOCK",
+            price=204.60001,
+            percent_change=2.43316,
+            timestamp=1745415000
+        )
+    
+        # Normalize the SQL query string
+        expected_query = """
+            INSERT INTO market_data (symbol, asset_type, price, percent_change, updated_at)
+            VALUES (%s, %s, %s, %s, to_timestamp(%s))
+            ON CONFLICT (symbol)
+            DO UPDATE SET
+                price = EXCLUDED.price,
+                percent_change = EXCLUDED.percent_change,
+                updated_at = EXCLUDED.updated_at,
+                asset_type = EXCLUDED.asset_type
+        """.strip().replace("\n", " ").replace("  ", " ")
+    
+        actual_query = mock_cursor.execute.call_args[0][0].strip().replace("\n", " ").replace("  ", " ")
+    
+        # Assert that the normalized queries match
+        self.assertEqual(expected_query, actual_query)
+    
+        # Assert the parameters
+        mock_cursor.execute.assert_called_once_with(
+            mock_cursor.execute.call_args[0][0],  # Use the actual query from the mock
+            ("AAPL", "STOCK", 204.60001, 2.43316, 1745415000)
+        )
+        mock_connection.commit.assert_called_once()
+
+    @patch("etl.jobs.fetch_market_data.fetch_market_data.fetch_data")
+    @patch("etl.jobs.fetch_market_data.fetch_market_data.process_data")
+    @patch("etl.jobs.fetch_market_data.fetch_market_data.insert_or_update_data")
+    @patch("etl.jobs.fetch_market_data.fetch_market_data.get_db_connection")
+    def test_fetch_and_insert_data(self, mock_get_db_connection, mock_insert_or_update_data, mock_process_data, mock_fetch_data):
+        # Mock the database connection and cursor
+        mock_connection = MagicMock()
+        mock_cursor = MagicMock()
+        mock_get_db_connection.return_value = mock_connection
+        mock_connection.cursor.return_value = mock_cursor
+    
+        # Mock fetch_data and process_data
+        mock_fetch_data.side_effect = lambda asset: get_mock_api_response(asset["symbol"])
+        mock_process_data.side_effect = lambda data, symbol: (
+            data["timestamp"], float(data["close"]), float(data["percent_change"])
+        )
+    
+        # Test fetch_and_insert_data
+        assets = [{"symbol": "AAPL", "asset_type": "STOCK"}, {"symbol": "TQQQ", "asset_type": "STOCK"}]
+        fetch_and_insert_data(assets)
+    
+        # Assertions
+        mock_fetch_data.assert_any_call({"symbol": "AAPL", "asset_type": "STOCK"})
+        mock_fetch_data.assert_any_call({"symbol": "TQQQ", "asset_type": "STOCK"})
+        self.assertEqual(mock_fetch_data.call_count, 2)
+    
+        mock_process_data.assert_any_call(get_mock_api_response("AAPL"), "AAPL")
+        mock_process_data.assert_any_call(get_mock_api_response("TQQQ"), "TQQQ")
+        self.assertEqual(mock_process_data.call_count, 2)
+    
+        # Check the calls to insert_or_update_data
+        mock_insert_or_update_data.assert_any_call(
+            mock_cursor,
+            mock_connection,
+            "AAPL",
+            "STOCK",
+            float(204.60001),
+            float(2.43316),
+            int(1745415000)
+        )
+        mock_insert_or_update_data.assert_any_call(
+            mock_cursor,
+            mock_connection,
+            "TQQQ",
+            "STOCK",
+            float(48.049999),
+            float(6.63559),
+            int(1745415000)
+        )
+        self.assertEqual(mock_insert_or_update_data.call_count, 2)
 
 if __name__ == "__main__":
     unittest.main()

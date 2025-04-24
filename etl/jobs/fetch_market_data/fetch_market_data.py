@@ -98,6 +98,78 @@ def get_assets_needing_update(assets):
         cursor.close()
         connection.close()
 
+def fetch_data(asset):
+    """
+    Fetch real-time data for a given asset.
+    """
+    symbol = asset["symbol"]
+    asset_type = asset["asset_type"]
+
+    try:
+        log_message(f"Fetching real-time price for symbol: {symbol}, asset_type: {asset_type}...")
+        if asset_type == "STOCK":
+            data = get_realtime_stock_data(symbol)
+        elif asset_type == "CRYPTO":
+            data = get_realtime_crypto_data(symbol)
+        elif asset_type == "FOREX":
+            from_symbol, to_symbol = symbol.split("/")
+            data = get_realtime_forex_data(from_symbol, to_symbol)
+        else:
+            log_message(f"Unsupported asset type: {asset_type} for symbol: {symbol}. Skipping.")
+            return None
+
+        log_message(f"API response for symbol {symbol}: {data}")
+        return data
+
+    except Exception as e:
+        log_message(f"Error fetching data for symbol {symbol}: {e}")
+        raise
+
+
+def process_data(data, symbol):
+    """
+    Validate and process the API response data.
+    """
+    # Validate the API response
+    required_fields = ["timestamp", "close", "percent_change"]
+    log_message(f"Validating required fields : {required_fields}")
+    for field in required_fields:
+        if field not in data or data[field] is None:
+            raise ValueError(f"Missing or invalid field '{field}' in API response for symbol {symbol}: {data}")
+
+    log_message(f"All required fields are present in the API response for symbol {symbol}.")
+
+    # Extract and process the fields
+    timestamp = int(data["timestamp"])  # Ensure timestamp is an integer
+    price = float(data["close"])  # Convert "close" to float
+    percent_change = float(data["percent_change"]) if data["percent_change"] else 0.0  # Convert "percent_change" to float or default to 0.0
+
+    log_message(f"Extracted data for symbol {symbol}: timestamp={timestamp}, price={price}, percent_change={percent_change}")
+    return timestamp, price, percent_change
+
+def insert_or_update_data(cursor, connection, symbol, asset_type, price, percent_change, timestamp):
+    """
+    Insert or update the processed data into the database.
+    """
+    try:
+        # Insert or update the market_data table
+        cursor.execute("""
+            INSERT INTO market_data (symbol, asset_type, price, percent_change, updated_at)
+            VALUES (%s, %s, %s, %s, to_timestamp(%s))
+            ON CONFLICT (symbol)
+            DO UPDATE SET
+                price = EXCLUDED.price,
+                percent_change = EXCLUDED.percent_change,
+                updated_at = EXCLUDED.updated_at,
+                asset_type = EXCLUDED.asset_type
+        """, (symbol, asset_type, price, percent_change, timestamp))
+        connection.commit()
+
+        log_message(f"Successfully inserted or updated data for symbol: {symbol}.")
+    except Exception as e:
+        log_message(f"Error inserting or updating data for symbol {symbol}: {e}")
+        raise
+
 def fetch_and_insert_data(assets):
     """
     Fetch real-time prices for the given assets and insert them into the database.
@@ -121,37 +193,18 @@ def fetch_and_insert_data(assets):
                 asset_type = asset["asset_type"]
 
                 try:
-                    log_message(f"Fetching real-time price for symbol: {symbol}, asset_type: {asset_type}...")
-                    if asset_type == "STOCK":
-                        data = get_realtime_stock_data(symbol)
-                    elif asset_type == "CRYPTO":
-                        data = get_realtime_crypto_data(symbol)
-                    elif asset_type == "FOREX":
-                        from_symbol, to_symbol = symbol.split("/")
-                        data = get_realtime_forex_data(from_symbol, to_symbol)
-                    else:
-                        log_message(f"Unsupported asset type: {asset_type} for symbol: {symbol}. Skipping.")
+                    # Fetch data
+                    data = fetch_data(asset)
+                    if not data:
+                        failed_assets.append(asset)
                         continue
 
-                    # Parse the fetched data
-                    price = float(data["close"])
-                    updated_at = data.get("timestamp", datetime.now().timestamp())
-                    percent_change = float(data.get("percent_change", 0))
+                    # Process data
+                    timestamp, price, percent_change = process_data(data, symbol)
 
-                    # Insert or update the market_data table
-                    cursor.execute("""
-                        INSERT INTO market_data (symbol, asset_type, price, percent_change, updated_at)
-                        VALUES (%s, %s, %s, %s, to_timestamp(%s))
-                        ON CONFLICT (symbol)
-                        DO UPDATE SET
-                            price = EXCLUDED.price,
-                            percent_change = EXCLUDED.percent_change,
-                            updated_at = EXCLUDED.updated_at,
-                            asset_type = EXCLUDED.asset_type
-                    """, (symbol, asset_type, price, percent_change, updated_at))
-                    connection.commit()
+                    # Insert or update data
+                    insert_or_update_data(cursor, connection, symbol, asset_type, price, percent_change, timestamp)
 
-                    log_message(f"Successfully fetched and stored data for symbol: {symbol}.")
                     successfully_fetched.append(asset)
 
                 except Exception as e:
@@ -159,7 +212,8 @@ def fetch_and_insert_data(assets):
                         log_message(f"Rate limit exceeded for symbol {symbol}. Retrying in 60 seconds...")
                         failed_assets.append(asset)
                     else:
-                        log_message(f"Error fetching data for symbol {symbol}: {e}")
+                        log_message(f"Error processing data for symbol {symbol}: {e}")
+                        failed_assets.append(asset)
 
             # Update the remaining assets to only include those that failed
             remaining_assets = failed_assets
