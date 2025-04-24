@@ -1,99 +1,162 @@
+import time
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 from utils import (
-    log_message
-)
-from main import publish_kafka_messages, ProducerKafkaTopics
-from utils import (
+    log_message,
     get_historical_stock_data,
     get_historical_crypto_data,
     get_historical_fx_data,
-    log_message,
     get_db_connection,
     get_closest_us_market_closing_time
 )
-from datetime import datetime, timedelta
-from dateutil.relativedelta import relativedelta
+from main import publish_kafka_messages, ProducerKafkaTopics
 
 
-def generate_first_dates_of_month(start_date, end_date):
+# --- Utility Functions ---
+def adjust_date_range(start_date, end_date):
     """
-    Generate a list of the first dates of each month between start_date and end_date.
+    Adjust the start_date and end_date to handle edge cases:
+    - Ensure start_date is the first day of its month.
+    - Ensure the interval is at least 1 month.
+    - Include the first day of the current month if the current date is after the first day.
+    - Prevent requests for future dates.
     """
-    first_dates = []
-    current_date = datetime.strptime(start_date, "%Y-%m-%d").date().replace(day=1)
-    end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+    # Set start_date to the first day of its month
+    start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date().replace(day=1)
+    end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
+    current_date = datetime.now().date()
 
-    while current_date <= end_date:
-        first_dates.append(current_date)
-        current_date += relativedelta(months=1)
+    if end_date_obj >= current_date.replace(day=1):
+        end_date_obj = current_date
 
-    return first_dates
+    # Handle special case: start_date and end_date are the same
+    fetch_current_month_only = (start_date_obj == end_date_obj)
+
+    return start_date_obj.strftime("%Y-%m-%d"), end_date_obj.strftime("%Y-%m-%d"), fetch_current_month_only
 
 
-def fetch_historical_market_data(symbols, asset_type, start_date, end_date):
+def fetch_existing_data_ranges(symbols, asset_type):
     """
-    Fetch historical market data for the given symbols, asset type, and date range.
-    Validate existing data in the database and fetch missing data from Twelve Data API.
+    Fetch existing data ranges from the database for the given symbols and asset type.
     """
-    log_message(f"Fetching historical market data for symbols: {symbols}, asset_type: {asset_type}, start_date: {start_date}, end_date: {end_date}...")
+    connection = get_db_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute("""
+            SELECT symbol, MIN(date) AS min_date, MAX(date) AS max_date
+            FROM market_data_monthly
+            WHERE symbol = ANY(%s) AND asset_type = %s
+            GROUP BY symbol
+        """, (symbols, asset_type))
+        existing_data_ranges = cursor.fetchall()
+        return {
+            row[0]: {"min_date": row[1], "max_date": row[2]} for row in existing_data_ranges
+        }
+    finally:
+        cursor.close()
+        connection.close()
 
-    # Validate input
-    if asset_type not in ['stock', 'crypto', 'forex']:
-        raise ValueError(f"Unsupported asset_type: {asset_type}. Supported types are 'stock', 'crypto', and 'forex'.")
 
+def determine_symbols_needing_update(symbols, asset_type, start_date, end_date, existing_data_by_symbol):
+    """
+    Determine which symbols and date ranges need updates based on existing data.
+    """
+    symbols_needing_update = []
+    start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date().replace(day=1)
+    end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date().replace(day=1)
+
+    for symbol in symbols:
+        if symbol in existing_data_by_symbol:
+            existing_min_date = existing_data_by_symbol[symbol]["min_date"]
+            existing_max_date = existing_data_by_symbol[symbol]["max_date"]
+
+            log_message(f"Existing data for symbol {symbol}: min_date={existing_min_date}, max_date={existing_max_date}")
+            log_message(f"Requested range: start_first_date={start_date_obj}, end_first_date={end_date_obj}")
+
+            # Check if the requested range is fully covered
+            if existing_min_date <= start_date_obj and existing_max_date >= end_date_obj:
+                log_message(f"Data for symbol {symbol} is fully covered in the database. Skipping API call.")
+                continue
+
+            adjusted_start_date = min(existing_min_date, start_date_obj) if existing_min_date else start_date_obj
+            adjusted_end_date = max(existing_max_date, end_date_obj) if existing_max_date else end_date_obj
+
+            # Adjust the start_date and end_date for uncovered ranges
+            log_message(f"Symbol {symbol} needs updates. Adjusted range: start_date={adjusted_start_date}, end_date={adjusted_end_date}")
+            symbols_needing_update.append((symbol, adjusted_start_date, adjusted_end_date))
+            symbols_needing_update.append((symbol, adjusted_start_date, adjusted_end_date))
+        else:
+            # No data exists for this symbol, fetch the entire range
+            log_message(f"No existing data for symbol {symbol}. Fetching full range: start_date={start_date_obj}, end_date={end_date_obj}")
+            symbols_needing_update.append((symbol, start_date_obj, end_date_obj))
+            symbols_needing_update.append((symbol, start_date_obj, end_date_obj))
+
+    return symbols_needing_update
+
+
+def fetch_and_insert_data(symbols_needing_update, asset_type, fetch_current_month_only):
+    """
+    Fetch missing data from the Twelve Data API and insert it into the database.
+    """
+    fetched_data = []
     connection = get_db_connection()
     cursor = connection.cursor()
 
     try:
-        # Generate all first dates of each month within the date range
-        first_dates = generate_first_dates_of_month(start_date, end_date)
+        for symbol, range_start, range_end in symbols_needing_update:
+            retry_count = 0
+            while retry_count < 3:
+                try:
+                    log_message(f"Fetching data for symbol {symbol} from {range_start.strftime('%Y-%m-%d')} to {range_end.strftime('%Y-%m-%d')}...")
+                    if asset_type == 'STOCK':
+                        api_data = get_historical_stock_data(symbol, start_date=range_start.strftime('%Y-%m-%d'), end_date=range_end.strftime('%Y-%m-%d'))
+                    elif asset_type == 'CRYPTO':
+                        api_data = get_historical_crypto_data(symbol, market="USD", start_date=range_start.strftime('%Y-%m-%d'), end_date=range_end.strftime('%Y-%m-%d'))
+                    elif asset_type == 'FOREX':
+                        from_symbol, to_symbol = symbol.split('/')
+                        api_data = get_historical_fx_data(from_symbol, to_symbol, start_date=range_start.strftime('%Y-%m-%d'), end_date=range_end.strftime('%Y-%m-%d'))
+                    else:
+                        log_message(f"Unsupported asset type: {asset_type}")
+                        break
 
-        # Check for existing data in the database
-        cursor.execute("""
-            SELECT symbol, date, price
-            FROM market_data_monthly
-            WHERE symbol = ANY(%s) AND asset_type = %s AND date = ANY(%s)
-        """, (symbols, asset_type, first_dates))
-        existing_data = cursor.fetchall()
+                    # Process and format the fetched data
+                    if fetch_current_month_only:
+                        # Only process the last entry in the API response
+                        if api_data:
+                            last_entry = api_data[-1]  # Get the last data point
+                            api_date = last_entry["datetime"]
+                            fetched_data.append({
+                                "symbol": symbol,
+                                "price": float(last_entry["close"]),
+                                "date": datetime.strptime(api_date, "%Y-%m-%d").date(),  # Use the date as-is
+                                "asset_type": asset_type
+                            })
+                            log_message(f"Fetched data (current month only): {fetched_data[-1]}")
+                    else:
+                        # Process all entries in the API response
+                        for entry in api_data:
+                            api_date = entry["datetime"]
+                            fetched_data.append({
+                                "symbol": symbol,
+                                "price": float(entry["close"]),
+                                "date": datetime.strptime(api_date, "%Y-%m-%d").date(),  # Use the date as-is
+                                "asset_type": asset_type
+                            })
 
-        # Organize existing data by symbol and date
-        existing_data_by_symbol_and_date = {(row[0], row[1]): row[2] for row in existing_data}
-        log_message(f"Found {len(existing_data)} existing records in the database.")
+                    log_message(f"Successfully fetched historical data for symbol: {symbol}.")
+                    log_message(f"Fetched {len(fetched_data)} records for symbol: {symbol} from {range_start} to {range_end}.")
+                    for data in fetched_data:
+                        log_message(f"Fetched data: {data}")
+                    break
+                except Exception as e:
+                    if "429" in str(e):
+                        log_message(f"Rate limit exceeded for symbol {symbol}. Retrying in 60 seconds...")
+                        time.sleep(60)
+                        retry_count += 1
+                    else:
+                        log_message(f"Error fetching data for symbol {symbol}: {e}")
+                        break
 
-        # Determine symbols and dates needing updates
-        symbols_needing_update = []
-        for symbol in symbols:
-            for date in first_dates:
-                if (symbol, date) not in existing_data_by_symbol_and_date:
-                    symbols_needing_update.append((symbol, date))
-
-        log_message(f"Symbols and dates needing updates: {symbols_needing_update}")
-
-        # Fetch missing data from Twelve Data API
-        fetched_data = []
-        for symbol, date in symbols_needing_update:
-            if asset_type == 'stock':
-                api_data = get_historical_stock_data(symbol, start_date=date.strftime("%Y-%m-%d"), end_date=date.strftime("%Y-%m-%d"))
-            elif asset_type == 'crypto':
-                api_data = get_historical_crypto_data(symbol, market="USD", start_date=date.strftime("%Y-%m-%d"), end_date=date.strftime("%Y-%m-%d"))
-            elif asset_type == 'forex':
-                from_symbol, to_symbol = symbol.split("/")
-                api_data = get_historical_fx_data(from_symbol, to_symbol, start_date=date.strftime("%Y-%m-%d"), end_date=date.strftime("%Y-%m-%d"))
-            else:
-                log_message(f"Placeholder for asset_type: {asset_type}")
-                continue
-
-            # Process and format the fetched data
-            for entry in api_data:
-                api_date = entry["datetime"]
-                us_market_closing_time = get_closest_us_market_closing_time(datetime.strptime(api_date, "%Y-%m-%d"))
-                fetched_data.append({
-                    "symbol": symbol,
-                    "price": float(entry["close"]),
-                    "date": us_market_closing_time.date(),
-                    "asset_type": asset_type
-                })
-
-        # Insert fetched data into the database
         if fetched_data:
             log_message(f"Inserting {len(fetched_data)} new records into the database...")
             for record in fetched_data:
@@ -104,22 +167,26 @@ def fetch_historical_market_data(symbols, asset_type, start_date, end_date):
                 """, (record["symbol"], record["price"], record["date"], record["asset_type"]))
             connection.commit()
 
-        # Combine existing and fetched data
-        all_data = [
-            {"symbol": row[0], "price": row[2], "date": row[1], "asset_type": asset_type}
-            for row in existing_data
-        ] + fetched_data
-
-        log_message(f"Successfully fetched and updated historical market data.")
-        return all_data
-
-    except Exception as e:
-        log_message(f"Error fetching historical market data: {e}")
-        connection.rollback()
-        raise
     finally:
         cursor.close()
         connection.close()
+
+    return fetched_data
+
+
+# --- Main Functions ---
+def fetch_historical_market_data(symbols, asset_type, start_date, end_date):
+    """
+    Fetch historical market data for the given symbols, asset type, and date range.
+    """
+    start_date, end_date, fetch_current_month_only = adjust_date_range(start_date, end_date)
+    log_message(f"Adjusted date range: start_date={start_date}, end_date={end_date}, fetch_current_month_only={fetch_current_month_only}")
+    existing_data_by_symbol = fetch_existing_data_ranges(symbols, asset_type)
+    log_message(f"Existing data ranges: {existing_data_by_symbol}")
+    symbols_needing_update = determine_symbols_needing_update(symbols, asset_type, start_date, end_date, existing_data_by_symbol)
+    log_message(f"Symbols and date ranges needing updates: {symbols_needing_update}")
+    return fetch_and_insert_data(symbols_needing_update, asset_type, fetch_current_month_only)
+
 
 def publish_market_data_monthly_complete(symbols, asset_type, start_date, end_date, record_count):
     """
@@ -129,7 +196,6 @@ def publish_market_data_monthly_complete(symbols, asset_type, start_date, end_da
         log_message("No symbols provided for Kafka topic publication.")
         return
 
-    # Use the centralized publish_kafka_messages method
     params = {
         "symbols": symbols,
         "asset_type": asset_type,
@@ -148,27 +214,20 @@ def run(message_payload):
     log_message("Starting fetch_historical_market_data job...")
     log_message(f"Received message payload: {message_payload}")
 
-    # Extract the required fields from the message payload
-    if isinstance(message_payload, dict):
-        assets = message_payload.get("assets")
-        start_date = message_payload.get("start_date")
-        end_date = message_payload.get("end_date")
-    else:
+    if not isinstance(message_payload, dict):
         log_message("Error: message_payload must be a dictionary with 'assets', 'start_date', and 'end_date' keys.")
         return
 
-    # Validate the payload
+    assets = message_payload.get("assets")
+    start_date = message_payload.get("start_date")
+    end_date = message_payload.get("end_date")
+
     if not assets or not start_date or not end_date:
         log_message("Error: Missing required fields in message payload.")
         return
 
     log_message(f"Received assets: {assets}, start_date: {start_date}, end_date: {end_date}")
 
-    if not isinstance(assets, list):
-        log_message("Error: symbols must be a list of dictionaries with 'symbol' and 'asset_type' keys.")
-        return
-
-    # Group assets by asset type
     assets_by_asset_type = {}
     for item in assets:
         if not isinstance(item, dict) or "symbol" not in item or "asset_type" not in item:
@@ -176,13 +235,10 @@ def run(message_payload):
             continue
         asset_type = item["asset_type"]
         symbol = item["symbol"]
-        if asset_type not in assets_by_asset_type:
-            assets_by_asset_type[asset_type] = []
-        assets_by_asset_type[asset_type].append(symbol)
+        assets_by_asset_type.setdefault(asset_type, []).append(symbol)
 
     log_message(f"Grouped assets by asset type: {assets_by_asset_type}")
 
-    # Process each asset type
     try:
         total_record_count = 0
         for asset_type, asset_symbols in assets_by_asset_type.items():
@@ -190,8 +246,6 @@ def run(message_payload):
             data = fetch_historical_market_data(asset_symbols, asset_type, start_date, end_date)
             record_count = len(data)
             total_record_count += record_count
-
-            # Publish Kafka topic for each asset type
             publish_market_data_monthly_complete(asset_symbols, asset_type, start_date, end_date, record_count)
 
         log_message(f"Total records processed: {total_record_count}")
