@@ -62,22 +62,33 @@ def determine_symbols_needing_update(symbols, asset_type, start_date, end_date, 
     Determine which symbols and date ranges need updates based on existing data.
     """
     symbols_needing_update = []
-    start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
-    end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
+    start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date().replace(day=1)
+    end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date().replace(day=1)
 
     for symbol in symbols:
         if symbol in existing_data_by_symbol:
             existing_min_date = existing_data_by_symbol[symbol]["min_date"]
             existing_max_date = existing_data_by_symbol[symbol]["max_date"]
 
+            log_message(f"Existing data for symbol {symbol}: min_date={existing_min_date}, max_date={existing_max_date}")
+            log_message(f"Requested range: start_first_date={start_date_obj}, end_first_date={end_date_obj}")
+
+            # Check if the requested range is fully covered
             if existing_min_date <= start_date_obj and existing_max_date >= end_date_obj:
                 log_message(f"Data for symbol {symbol} is fully covered in the database. Skipping API call.")
                 continue
 
             adjusted_start_date = min(existing_min_date, start_date_obj) if existing_min_date else start_date_obj
             adjusted_end_date = max(existing_max_date, end_date_obj) if existing_max_date else end_date_obj
+
+            # Adjust the start_date and end_date for uncovered ranges
+            log_message(f"Symbol {symbol} needs updates. Adjusted range: start_date={adjusted_start_date}, end_date={adjusted_end_date}")
+            symbols_needing_update.append((symbol, adjusted_start_date, adjusted_end_date))
             symbols_needing_update.append((symbol, adjusted_start_date, adjusted_end_date))
         else:
+            # No data exists for this symbol, fetch the entire range
+            log_message(f"No existing data for symbol {symbol}. Fetching full range: start_date={start_date_obj}, end_date={end_date_obj}")
+            symbols_needing_update.append((symbol, start_date_obj, end_date_obj))
             symbols_needing_update.append((symbol, start_date_obj, end_date_obj))
 
     return symbols_needing_update
@@ -96,13 +107,14 @@ def fetch_and_insert_data(symbols_needing_update, asset_type, fetch_current_mont
             retry_count = 0
             while retry_count < 3:
                 try:
+                    log_message(f"Fetching data for symbol {symbol} from {range_start.strftime('%Y-%m-%d')} to {range_end.strftime('%Y-%m-%d')}...")
                     if asset_type == 'STOCK':
-                        api_data = get_historical_stock_data(symbol, start_date=range_start.strftime("%Y-%m-%d"), end_date=range_end.strftime("%Y-%m-%d"))
+                        api_data = get_historical_stock_data(symbol, start_date=range_start.strftime('%Y-%m-%d'), end_date=range_end.strftime('%Y-%m-%d'))
                     elif asset_type == 'CRYPTO':
-                        api_data = get_historical_crypto_data(symbol, market="USD", start_date=range_start.strftime("%Y-%m-%d"), end_date=range_end.strftime("%Y-%m-%d"))
+                        api_data = get_historical_crypto_data(symbol, market="USD", start_date=range_start.strftime('%Y-%m-%d'), end_date=range_end.strftime('%Y-%m-%d'))
                     elif asset_type == 'FOREX':
-                        from_symbol, to_symbol = symbol.split("/")
-                        api_data = get_historical_fx_data(from_symbol, to_symbol, start_date=range_start.strftime("%Y-%m-%d"), end_date=range_end.strftime("%Y-%m-%d"))
+                        from_symbol, to_symbol = symbol.split('/')
+                        api_data = get_historical_fx_data(from_symbol, to_symbol, start_date=range_start.strftime('%Y-%m-%d'), end_date=range_end.strftime('%Y-%m-%d'))
                     else:
                         log_message(f"Unsupported asset type: {asset_type}")
                         break
@@ -168,7 +180,9 @@ def fetch_historical_market_data(symbols, asset_type, start_date, end_date):
     Fetch historical market data for the given symbols, asset type, and date range.
     """
     start_date, end_date, fetch_current_month_only = adjust_date_range(start_date, end_date)
+    log_message(f"Adjusted date range: start_date={start_date}, end_date={end_date}, fetch_current_month_only={fetch_current_month_only}")
     existing_data_by_symbol = fetch_existing_data_ranges(symbols, asset_type)
+    log_message(f"Existing data ranges: {existing_data_by_symbol}")
     symbols_needing_update = determine_symbols_needing_update(symbols, asset_type, start_date, end_date, existing_data_by_symbol)
     log_message(f"Symbols and date ranges needing updates: {symbols_needing_update}")
     return fetch_and_insert_data(symbols_needing_update, asset_type, fetch_current_month_only)
