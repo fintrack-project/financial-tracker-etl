@@ -57,44 +57,112 @@ def load_env_variables(env_file=".env"):
         raise FileNotFoundError(f"{env_file} file not found.")
     return env_vars
 
-def quote_market_data(symbols, region="US"):
+def get_realtime_stock_data(symbol):
     """
-    Quote market data for the given symbols from Yahoo Finance via RapidAPI.
+    Fetch real-time stock data for the given symbol using Twelve Data API.
     """
-    log_message("Quoting market data from external API...")
-    api_host = os.getenv("RAPIDAPI_HOST")
-    api_market_get_quotes = os.getenv("RAPIDAPI_MARKET_GET_QUOTES")
-    api_key = os.getenv("RAPIDAPI_KEY")
+    log_message(f"Fetching real-time stock data for symbol: {symbol}...")
+    api_host = os.getenv("TWELVE_DATA_API_HOST")
+    api_quote = os.getenv("TWELVE_DATA_API_QUOTE")
+    api_key = os.getenv("TWELVE_DATA_API_KEY")
 
-    if not api_host or not api_key or not api_market_get_quotes:
-        log_message("API_HOST or API_KEY is not set. Check your .env file.")
-        raise ValueError("API_HOST or API_KEY is not set. Check your .env file.")
+    if not api_host or not api_quote or not api_key:
+        raise ValueError("TWELVE_DATA_API_HOST, TWELVE_DATA_API_QUOTE, or TWELVE_DATA_API_KEY is not set. Check your .env file.")
 
-    headers = {
-        "X-RapidAPI-Key": api_key,
-        "X-RapidAPI-Host": api_host
-    }
     params = {
-        "symbols": ",".join([quote(symbol) for symbol in symbols]),
-        "region": region
+        "symbol": symbol,
+        "apikey": api_key,
+        "format": "JSON"
     }
 
-    api_url = f"https://{api_host}/{api_market_get_quotes}"
+    api_url = f"https://{api_host}{api_quote}"
 
     try:
-        response = requests.get(api_url, headers=headers, params=params)
+        response = requests.get(api_url, params=params)
         response.raise_for_status()
         data = response.json()
 
         # Validate response structure
-        if "quoteResponse" not in data or "result" not in data["quoteResponse"]:
-            raise ValueError("Invalid API response format")
+        if "price" not in data:
+            raise ValueError(f"Invalid API response format for stock data: {data}")
 
-        log_message(f"Successfully fetched market data for {len(data['quoteResponse']['result'])} symbols.")
-        return data["quoteResponse"]["result"]
+        log_message(f"Successfully fetched real-time stock data for symbol: {symbol}.")
+        return data
 
     except requests.exceptions.RequestException as e:
-        log_message(f"Error quoting market data: {e}")
+        log_message(f"Error fetching real-time stock data for symbol {symbol}: {e}")
+        raise
+
+def get_realtime_crypto_data(symbol, market="USD"):
+    """
+    Fetch real-time cryptocurrency data for the given symbol and market using Twelve Data API.
+    """
+    log_message(f"Fetching real-time cryptocurrency data for symbol: {symbol}, market: {market}...")
+    api_host = os.getenv("TWELVE_DATA_API_HOST")
+    api_quote = os.getenv("TWELVE_DATA_API_QUOTE")
+    api_key = os.getenv("TWELVE_DATA_API_KEY")
+
+    if not api_host or not api_quote or not api_key:
+        raise ValueError("TWELVE_DATA_API_HOST, TWELVE_DATA_API_QUOTE, or TWELVE_DATA_API_KEY is not set. Check your .env file.")
+
+    params = {
+        "symbol": f"{symbol}/{market}",
+        "apikey": api_key,
+        "format": "JSON"
+    }
+
+    api_url = f"https://{api_host}{api_quote}"
+
+    try:
+        response = requests.get(api_url, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        # Validate response structure
+        if "price" not in data:
+            raise ValueError(f"Invalid API response format for cryptocurrency data: {data}")
+
+        log_message(f"Successfully fetched real-time cryptocurrency data for symbol: {symbol}.")
+        return data
+
+    except requests.exceptions.RequestException as e:
+        log_message(f"Error fetching real-time cryptocurrency data for symbol {symbol}: {e}")
+        raise
+
+def get_realtime_forex_data(from_symbol, to_symbol):
+    """
+    Fetch real-time forex data for the given currency pair using Twelve Data API.
+    """
+    log_message(f"Fetching real-time forex data for pair: {from_symbol}/{to_symbol}...")
+    api_host = os.getenv("TWELVE_DATA_API_HOST")
+    api_quote = os.getenv("TWELVE_DATA_API_QUOTE")
+    api_key = os.getenv("TWELVE_DATA_API_KEY")
+
+    if not api_host or not api_quote or not api_key:
+        raise ValueError("TWELVE_DATA_API_HOST, TWELVE_DATA_API_QUOTE, or TWELVE_DATA_API_KEY is not set. Check your .env file.")
+
+    params = {
+        "symbol": f"{from_symbol}/{to_symbol}",
+        "apikey": api_key,
+        "format": "JSON"
+    }
+
+    api_url = f"https://{api_host}{api_quote}"
+
+    try:
+        response = requests.get(api_url, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        # Validate response structure
+        if "price" not in data:
+            raise ValueError(f"Invalid API response format for forex data: {data}")
+
+        log_message(f"Successfully fetched real-time forex data for pair: {from_symbol}/{to_symbol}.")
+        return data
+
+    except requests.exceptions.RequestException as e:
+        log_message(f"Error fetching real-time forex data for pair {from_symbol}/{to_symbol}: {e}")
         raise
 
 def get_historical_stock_data(symbol, start_date=None, end_date=None):
