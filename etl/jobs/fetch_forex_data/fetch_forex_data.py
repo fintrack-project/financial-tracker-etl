@@ -1,5 +1,5 @@
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from etl.utils import (
     get_db_connection,
     log_message,
@@ -22,17 +22,26 @@ def get_forex_symbols_needing_update(symbols):
     try:
         # Get the most recent US market closing time
         most_recent_closing_time_utc = get_closest_us_market_closing_time()
-        log_message(f"Most recent US market closing time (UTC): {most_recent_closing_time_utc}")
-
-        # Query to check which symbols need updates
+        log_message(f"Closest US market closing time: {most_recent_closing_time_utc}")
+        log_message(f"Compare against the previous day: {most_recent_closing_time_utc - timedelta(days=1)}")
+        log_message(f"Symbols to check: {symbols}")
+        # Query to check existing symbols
         cursor.execute("""
-            SELECT DISTINCT symbol
+            SELECT symbol, price, change, percent_change, high, low, updated_at
             FROM forex_data
-            WHERE symbol = ANY(%s) AND (updated_at IS NULL OR updated_at < %s)
-        """, (symbols, most_recent_closing_time_utc))
+            WHERE symbol = ANY(%s) AND updated_at >= %s
+        """, (symbols, most_recent_closing_time_utc - timedelta(days=1)))
 
-        # Extract symbols needing updates
-        symbols_needing_update = [row[0] for row in cursor.fetchall()]
+        # Fetch existing data
+        existing_data = cursor.fetchall()
+        log_message(f"Found {len(existing_data)} existing forex data records.")
+
+        # Extract symbols with up-to-date data
+        existing_symbols = {row[0] for row in existing_data}
+        log_message(f"Symbols with up-to-date data: {existing_symbols}")
+
+        # Find symbols that need updates
+        symbols_needing_update = [symbol for symbol in symbols if symbol not in existing_symbols]
         log_message(f"Symbols needing updates: {symbols_needing_update}")
 
         return symbols_needing_update
@@ -66,7 +75,7 @@ def process_data(data, symbol):
     Validate and process the API response data.
     """
     # Validate the API response
-    required_fields = ["close", "percent_change"]
+    required_fields = ["close", "percent_change", "change", "high", "low"]
     log_message(f"Validating required fields: {required_fields}")
     for field in required_fields:
         if field not in data or data[field] is None:
@@ -77,26 +86,33 @@ def process_data(data, symbol):
     # Extract and process the fields
     price = float(data["close"])  # Convert "close" to float
     percent_change = float(data["percent_change"]) if data["percent_change"] else 0.0  # Convert "percent_change" to float or default to 0.0
+    change = float(data["change"]) if data["change"] else 0.0  # Convert "change" to float or default to 0.0
+    high = float(data["high"])  # Convert "high" to float
+    low = float(data["low"])  # Convert "low" to float
 
-    log_message(f"Extracted data for symbol {symbol}: price={price}, percent_change={percent_change}")
-    return price, percent_change
+    log_message(f"Extracted data for symbol {symbol}: price={price}, change={change}, "
+                f"percent_change={percent_change}, high={high}, low={low}")
+    return price, change, percent_change, high, low
 
 
-def insert_or_update_data(cursor, connection, symbol, price, percent_change):
+def insert_or_update_data(cursor, connection, symbol, price, change, percent_change, high, low):
     """
     Insert or update the processed forex data into the database.
     """
     try:
         # Insert or update the forex_data table
         cursor.execute("""
-            INSERT INTO forex_data (symbol, price, percent_change, updated_at)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO forex_data (symbol, price, change, percent_change, high, low, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (symbol)
             DO UPDATE SET
                 price = EXCLUDED.price,
+                change = EXCLUDED.change,
                 percent_change = EXCLUDED.percent_change,
+                high = EXCLUDED.high,
+                low = EXCLUDED.low,
                 updated_at = EXCLUDED.updated_at
-        """, (symbol, price, percent_change, datetime.now(timezone.utc)))
+        """, (symbol, price, change, percent_change, high, low, datetime.now(timezone.utc)))
         connection.commit()
 
         log_message(f"Successfully inserted or updated forex data for symbol: {symbol}.")
@@ -124,7 +140,6 @@ def fetch_and_insert_data(symbols):
             failed_symbols = []  # Track symbols that failed in this iteration
 
             for symbol in remaining_symbols:
-
                 try:
                     # Fetch data
                     data = fetch_data(symbol)
@@ -133,10 +148,10 @@ def fetch_and_insert_data(symbols):
                         continue
 
                     # Process data
-                    price, percent_change = process_data(data, symbol)
+                    price, change, percent_change, price_high, price_low = process_data(data, symbol)
 
                     # Insert or update data
-                    insert_or_update_data(cursor, connection, symbol, price, percent_change)
+                    insert_or_update_data(cursor, connection, symbol, price, change, percent_change, price_high, price_low)
 
                     successfully_fetched.append(symbol)
 
