@@ -389,3 +389,26 @@
 2025-04-18 10:59:33,809 - INFO - Validating symbols against the holdings table...
 2025-04-18 10:59:33,809 - INFO - Symbols to validate: ['AAPL', 'TSLA', 'INVALID']
 2025-04-18 10:59:33,809 - INFO - Warning: The following symbols do not exist in the holdings table and will be ignored: {'INVALID'}
+2025-04-24 15:27:30,560 - INFO - Fetching assets that need price updates...
+2025-04-24 15:27:30,560 - INFO - Most recent US market closing time in UTC: 2025-04-16 20:00:00
+2025-04-24 15:27:30,560 - INFO - Found 2 symbols needing updates.
+2025-04-24 15:27:30,561 - INFO - Starting update_market_data job...
+2025-04-24 15:27:30,561 - INFO - Received message payload: {'assets': [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]}
+2025-04-24 15:27:30,561 - INFO - Received assets: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 15:27:30,561 - INFO - Assets needing updates: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 15:27:30,561 - INFO - update_market_data job completed successfully.
+2025-04-24 15:27:30,561 - INFO - Starting update_market_data job...
+2025-04-24 15:27:30,561 - INFO - Received message payload: INVALID_INPUT
+2025-04-24 15:27:30,561 - INFO - Error: message_payload must be a dictionary with an 'assets' key.
+2025-04-24 15:27:30,561 - INFO - Starting update_market_data job...
+2025-04-24 15:27:30,561 - INFO - Received message payload: {'assets': [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]}
+2025-04-24 15:27:30,561 - INFO - Received assets: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}]
+2025-04-24 15:27:30,561 - INFO - No assets need updates. Exiting job.
+2025-04-24 15:27:30,561 - INFO - update_market_data job completed successfully.
+2025-04-24 15:27:30,562 - INFO - Starting update_market_data job...
+2025-04-24 15:27:30,562 - INFO - Received message payload: {'assets': [{'symbol': 'INVALID', 'asset_type': 'STOCK'}]}
+2025-04-24 15:27:30,562 - INFO - Received assets: [{'symbol': 'INVALID', 'asset_type': 'STOCK'}]
+2025-04-24 15:27:30,562 - INFO - No valid assets found. Exiting job.
+2025-04-24 15:27:30,562 - INFO - Validating assets against the holdings table...
+2025-04-24 15:27:30,562 - INFO - Assets to validate: [{'symbol': 'AAPL', 'asset_type': 'STOCK'}, {'symbol': 'TSLA', 'asset_type': 'STOCK'}, {'symbol': 'INVALID', 'asset_type': 'STOCK'}]
+2025-04-24 15:27:30,562 - INFO - Warning: The following symbols do not exist in the holdings table and will be ignored: {'INVALID'}

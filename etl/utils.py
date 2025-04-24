@@ -57,6 +57,46 @@ def load_env_variables(env_file=".env"):
         raise FileNotFoundError(f"{env_file} file not found.")
     return env_vars
 
+def quote_market_index_data(symbols, region="US"):
+    """
+    Quote market data for the given symbols from Yahoo Finance via RapidAPI.
+    """
+    log_message("Quoting market data from external API...")
+    api_host = os.getenv("RAPIDAPI_HOST")
+    api_market_get_quotes = os.getenv("RAPIDAPI_MARKET_GET_QUOTES")
+    api_key = os.getenv("RAPIDAPI_KEY")
+
+    if not api_host or not api_key or not api_market_get_quotes:
+        log_message("API_HOST or API_KEY is not set. Check your .env file.")
+        raise ValueError("API_HOST or API_KEY is not set. Check your .env file.")
+
+    headers = {
+        "X-RapidAPI-Key": api_key,
+        "X-RapidAPI-Host": api_host
+    }
+    params = {
+        "symbols": ",".join([quote(symbol) for symbol in symbols]),
+        "region": region
+    }
+
+    api_url = f"https://{api_host}/{api_market_get_quotes}"
+
+    try:
+        response = requests.get(api_url, headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        # Validate response structure
+        if "quoteResponse" not in data or "result" not in data["quoteResponse"]:
+            raise ValueError("Invalid API response format")
+
+        log_message(f"Successfully fetched market data for {len(data['quoteResponse']['result'])} symbols.")
+        return data["quoteResponse"]["result"]
+
+    except requests.exceptions.RequestException as e:
+        log_message(f"Error quoting market data: {e}")
+        raise
+
 def get_realtime_stock_data(symbol):
     """
     Fetch real-time stock data for the given symbol using Twelve Data API.
