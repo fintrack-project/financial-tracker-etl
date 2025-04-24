@@ -7,7 +7,7 @@ from etl.utils import (
     get_realtime_forex_data,
     get_closest_us_market_closing_time
 )
-from datetime import datetime
+from datetime import datetime, timezone
 from main import publish_kafka_messages, ProducerKafkaTopics
 
 def validate_assets(assets):
@@ -131,7 +131,7 @@ def process_data(data, symbol):
     Validate and process the API response data.
     """
     # Validate the API response
-    required_fields = ["timestamp", "close", "percent_change"]
+    required_fields = ["close", "percent_change"]
     log_message(f"Validating required fields : {required_fields}")
     for field in required_fields:
         if field not in data or data[field] is None:
@@ -140,14 +140,13 @@ def process_data(data, symbol):
     log_message(f"All required fields are present in the API response for symbol {symbol}.")
 
     # Extract and process the fields
-    timestamp = int(data["timestamp"])  # Ensure timestamp is an integer
     price = float(data["close"])  # Convert "close" to float
     percent_change = float(data["percent_change"]) if data["percent_change"] else 0.0  # Convert "percent_change" to float or default to 0.0
 
-    log_message(f"Extracted data for symbol {symbol}: timestamp={timestamp}, price={price}, percent_change={percent_change}")
-    return timestamp, price, percent_change
+    log_message(f"Extracted data for symbol {symbol}: price={price}, percent_change={percent_change}")
+    return price, percent_change
 
-def insert_or_update_data(cursor, connection, symbol, asset_type, price, percent_change, timestamp):
+def insert_or_update_data(cursor, connection, symbol, asset_type, price, percent_change):
     """
     Insert or update the processed data into the database.
     """
@@ -155,14 +154,14 @@ def insert_or_update_data(cursor, connection, symbol, asset_type, price, percent
         # Insert or update the market_data table
         cursor.execute("""
             INSERT INTO market_data (symbol, asset_type, price, percent_change, updated_at)
-            VALUES (%s, %s, %s, %s, to_timestamp(%s))
+            VALUES (%s, %s, %s, %s, %s)
             ON CONFLICT (symbol)
             DO UPDATE SET
                 price = EXCLUDED.price,
                 percent_change = EXCLUDED.percent_change,
                 updated_at = EXCLUDED.updated_at,
                 asset_type = EXCLUDED.asset_type
-        """, (symbol, asset_type, price, percent_change, timestamp))
+        """, (symbol, asset_type, price, percent_change, datetime.now(timezone.utc)))
         connection.commit()
 
         log_message(f"Successfully inserted or updated data for symbol: {symbol}.")
@@ -200,10 +199,10 @@ def fetch_and_insert_data(assets):
                         continue
 
                     # Process data
-                    timestamp, price, percent_change = process_data(data, symbol)
+                    price, percent_change = process_data(data, symbol)
 
                     # Insert or update data
-                    insert_or_update_data(cursor, connection, symbol, asset_type, price, percent_change, timestamp)
+                    insert_or_update_data(cursor, connection, symbol, asset_type, price, percent_change)
 
                     successfully_fetched.append(asset)
 
