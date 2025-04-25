@@ -174,7 +174,6 @@ def fetch_and_insert_data(symbols_needing_update, asset_type, fetch_current_mont
     return fetched_data
 
 
-# --- Main Functions ---
 def fetch_historical_market_data(symbols, asset_type, start_date, end_date):
     """
     Fetch historical market data for the given symbols, asset type, and date range.
