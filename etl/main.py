@@ -17,6 +17,7 @@ class ConsumerKafkaTopics(Enum):
     HOLDINGS_MONTHLY_REQUEST = "HOLDINGS_MONTHLY_REQUEST"
     HISTORICAL_MARKET_DATA_REQUEST = "HISTORICAL_MARKET_DATA_REQUEST"
     FOREX_DATA_UPDATE_REQUEST = "FOREX_DATA_UPDATE_REQUEST"
+    WATCHLIST_MARKET_DATA_UPDATE_REQUEST = "WATCHLIST_MARKET_DATA_UPDATE_REQUEST"
 
 class ProducerKafkaTopics(Enum):
     """
@@ -28,6 +29,7 @@ class ProducerKafkaTopics(Enum):
     PROCESS_TRANSACTIONS_TO_HOLDINGS_MONTHLY_COMPLETE = "PROCESS_TRANSACTIONS_TO_HOLDINGS_MONTHLY_COMPLETE"
     HISTORICAL_MARKET_DATA_COMPLETE = "HISTORICAL_MARKET_DATA_COMPLETE"
     FOREX_DATA_UPDATE_COMPLETE = "FOREX_DATA_UPDATE_COMPLETE"
+    WATCHLIST_MARKET_DATA_UPDATE_COMPLETE = "WATCHLIST_MARKET_DATA_UPDATE_COMPLETE"
 
 # Updated TOPIC_TO_JOB_MAP structure
 TOPIC_TO_JOB_MAP = {
@@ -60,6 +62,11 @@ TOPIC_TO_JOB_MAP = {
     ConsumerKafkaTopics.FOREX_DATA_UPDATE_REQUEST.value: {
         "jobs": [
             {"job_name": "fetch_forex_data", "requires_params": True}
+        ]
+    },
+    ConsumerKafkaTopics.WATCHLIST_MARKET_DATA_UPDATE_REQUEST.value: {
+        "jobs": [
+            {"job_name": "fetch_watchlist_market_data", "requires_params": True}
         ]
     }
 }
