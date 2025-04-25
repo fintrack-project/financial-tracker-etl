@@ -4,7 +4,6 @@ from etl.utils import (
     log_message, 
     get_realtime_stock_data,
     get_realtime_crypto_data,
-    get_realtime_forex_data,
     get_closest_us_market_closing_time
 )
 from datetime import datetime, timezone
@@ -111,9 +110,6 @@ def fetch_data(asset):
             data = get_realtime_stock_data(symbol)
         elif asset_type == "CRYPTO":
             data = get_realtime_crypto_data(symbol)
-        elif asset_type == "FOREX":
-            from_symbol, to_symbol = symbol.split("/")
-            data = get_realtime_forex_data(from_symbol, to_symbol)
         else:
             log_message(f"Unsupported asset type: {asset_type} for symbol: {symbol}. Skipping.")
             return None
