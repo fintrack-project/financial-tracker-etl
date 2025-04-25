@@ -1,10 +1,10 @@
 import schedule
 import time
-from etl.jobs.fetch_market_average_data.fetch_market_average_data import run
+from etl.jobs.fetch_market_index_data.fetch_market_index_data import run
 
 def schedule_jobs():
     """
-    Schedule the fetch_live_market_average_data job to run daily at 4:00 PM ET.
+    Schedule the fetch_live_market_index_data job to run daily at 4:00 PM ET.
     """
     schedule.every().day.at("16:00").do(run)  # U.S. stock market closing time
 
