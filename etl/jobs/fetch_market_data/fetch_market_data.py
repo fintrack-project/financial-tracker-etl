@@ -127,8 +127,8 @@ def process_data(data, symbol):
     Validate and process the API response data.
     """
     # Validate the API response
-    required_fields = ["close", "percent_change"]
-    log_message(f"Validating required fields : {required_fields}")
+    required_fields = ["close", "percent_change", "change", "high", "low"]
+    log_message(f"Validating required fields: {required_fields}")
     for field in required_fields:
         if field not in data or data[field] is None:
             raise ValueError(f"Missing or invalid field '{field}' in API response for symbol {symbol}: {data}")
@@ -138,26 +138,33 @@ def process_data(data, symbol):
     # Extract and process the fields
     price = float(data["close"])  # Convert "close" to float
     percent_change = float(data["percent_change"]) if data["percent_change"] else 0.0  # Convert "percent_change" to float or default to 0.0
+    change = float(data["change"]) if data["change"] else 0.0  # Convert "change" to float or default to 0.0
+    high = float(data["high"])  # Convert "high" to float
+    low = float(data["low"])  # Convert "low" to float
 
-    log_message(f"Extracted data for symbol {symbol}: price={price}, percent_change={percent_change}")
-    return price, percent_change
+    log_message(f"Extracted data for symbol {symbol}: price={price}, change={change}, "
+                f"percent_change={percent_change}, high={high}, low={low}")
+    return price, percent_change, change, high, low
 
-def insert_or_update_data(cursor, connection, symbol, asset_type, price, percent_change):
+def insert_or_update_data(cursor, connection, symbol, asset_type, price, percent_change, change, high, low):
     """
     Insert or update the processed data into the database.
     """
     try:
         # Insert or update the market_data table
         cursor.execute("""
-            INSERT INTO market_data (symbol, asset_type, price, percent_change, updated_at)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO market_data (symbol, asset_type, price, percent_change, change, high, low, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (symbol)
             DO UPDATE SET
                 price = EXCLUDED.price,
                 percent_change = EXCLUDED.percent_change,
+                change = EXCLUDED.change,
+                high = EXCLUDED.high,
+                low = EXCLUDED.low,
                 updated_at = EXCLUDED.updated_at,
                 asset_type = EXCLUDED.asset_type
-        """, (symbol, asset_type, price, percent_change, datetime.now(timezone.utc)))
+        """, (symbol, asset_type, price, percent_change, change, high, low, datetime.now(timezone.utc)))
         connection.commit()
 
         log_message(f"Successfully inserted or updated data for symbol: {symbol}.")
@@ -195,10 +202,10 @@ def fetch_and_insert_data(assets):
                         continue
 
                     # Process data
-                    price, percent_change = process_data(data, symbol)
+                    price, percent_change, change, high, low = process_data(data, symbol)
 
                     # Insert or update data
-                    insert_or_update_data(cursor, connection, symbol, asset_type, price, percent_change)
+                    insert_or_update_data(cursor, connection, symbol, asset_type, price, percent_change, change, high, low)
 
                     successfully_fetched.append(asset)
 

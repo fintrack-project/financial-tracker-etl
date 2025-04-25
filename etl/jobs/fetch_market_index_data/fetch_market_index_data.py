@@ -7,11 +7,11 @@ from main import publish_kafka_messages, ProducerKafkaTopics
 # Load environment variables from .env file
 env_vars = load_env_variables()
 
-def get_existing_market_average_data(symbols, closest_closing_time):
+def get_existing_market_index_data(symbols, closest_closing_time):
     """
-    Check if market average data exists for the closest US market closing time.
+    Check if market index data exists for the closest US market closing time.
     """
-    log_message("Checking existing market average data...")
+    log_message("Checking existing market index data...")
     connection = get_db_connection()
     cursor = connection.cursor()
 
@@ -21,13 +21,13 @@ def get_existing_market_average_data(symbols, closest_closing_time):
         log_message(f"Symbols to check: {symbols}")
         cursor.execute("""
             SELECT symbol, price, price_change, percent_change, price_high, price_low, updated_at
-            FROM market_average_data
+            FROM market_index_data
             WHERE symbol = ANY(%s) AND updated_at >= %s
         """, (symbols, closest_closing_time - timedelta(days=1)))
 
         existing_data = cursor.fetchall()
-        log_message(f"Found {len(existing_data)} existing market average data records.")
-        log_message(f"Existing market average data: {existing_data}")
+        log_message(f"Found {len(existing_data)} existing market index data records.")
+        log_message(f"Existing market index data: {existing_data}")
         return [
             {
                 "symbol": row[0],
@@ -41,7 +41,7 @@ def get_existing_market_average_data(symbols, closest_closing_time):
             for row in existing_data
         ]
     except Exception as e:
-        log_message(f"Error checking existing market average data: {e}")
+        log_message(f"Error checking existing market index data: {e}")
         raise
     finally:
         cursor.close()
@@ -78,7 +78,7 @@ def save_market_data_to_db(data):
     try:
         for record in data:
             cursor.execute("""
-                INSERT INTO market_average_data (symbol, price, price_change, percent_change, price_high, price_low, updated_at)
+                INSERT INTO market_index_data (symbol, price, price_change, percent_change, price_high, price_low, updated_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (symbol)
                 DO UPDATE SET
@@ -98,18 +98,18 @@ def save_market_data_to_db(data):
                 datetime.now(timezone.utc)
             ))
         connection.commit()
-        log_message("Market average data saved successfully in the database.")
+        log_message("Market index data saved successfully in the database.")
     except Exception as e:
         connection.rollback()
-        log_message(f"Error saving market average data to the database: {e}")
+        log_message(f"Error saving market index data to the database: {e}")
         raise
     finally:
         cursor.close()
         connection.close()
 
-def publish_market_average_data_update_complete(data):
+def publish_market_index_data_update_complete(data):
     """
-    Publish a Kafka topic indicating that the market average data update is complete.
+    Publish a Kafka topic indicating that the market index data update is complete.
     """
     message_payload = [
         {
@@ -122,13 +122,13 @@ def publish_market_average_data_update_complete(data):
         }
         for record in data
     ]
-    publish_kafka_messages(ProducerKafkaTopics.MARKET_AVERAGE_DATA_UPDATE_COMPLETE, message_payload)
+    publish_kafka_messages(ProducerKafkaTopics.MARKET_INDEX_DATA_UPDATE_COMPLETE, message_payload)
 
 def run(message_payload):
     """
     Main function to fetch, process, and save market data.
     """
-    log_message("Running fetch_market_average_data job...")
+    log_message("Running fetch_market_index_data job...")
     log_message(f"Received message payload: {message_payload}")
 
     # Extract the list of symbols from message_payload
@@ -144,20 +144,20 @@ def run(message_payload):
         log_message("Error: symbols must be a list of strings.")
         return
 
-    log_message("Starting fetch_market_average_data job...")
+    log_message("Starting fetch_market_index_data job...")
 
     # Determine the closest US market closing time
     closest_closing_time_utc = get_closest_us_market_closing_time()
     log_message(f"Closest US market closing time in UTC: {closest_closing_time_utc}")
 
     # Check existing data
-    existing_data = get_existing_market_average_data(symbols, closest_closing_time_utc)
+    existing_data = get_existing_market_index_data(symbols, closest_closing_time_utc)
     if len(existing_data) == len(symbols):
-        log_message("All market average data is up-to-date. Using existing data.")
-        publish_market_average_data_update_complete(existing_data)
+        log_message("All market index data is up-to-date. Using existing data.")
+        publish_market_index_data_update_complete(existing_data)
 
     else:
-        log_message("Market average data is not up-to-date. Quoting new data...")
+        log_message("Market index data is not up-to-date. Quoting new data...")
 
         # Quote market data and process it if necessary
         raw_data = quote_market_index_data(symbols)
@@ -167,7 +167,7 @@ def run(message_payload):
         save_market_data_to_db(processed_data)
 
         # Publish Kafka topic
-        publish_market_average_data_update_complete(processed_data)
+        publish_market_index_data_update_complete(processed_data)
         log_message("Market data quoted and saved successfully.")
 
 if __name__ == "__main__":
