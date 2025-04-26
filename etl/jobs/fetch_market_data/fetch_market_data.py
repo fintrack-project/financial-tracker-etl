@@ -1,68 +1,22 @@
 import time
-from etl.utils import ( 
-    get_db_connection, 
-    log_message, 
+from etl.utils import (
+    get_db_connection,
+    log_message,
     get_realtime_stock_data,
     get_realtime_crypto_data,
+    get_realtime_forex_data,
     get_closest_us_market_closing_time
 )
+from etl.fetch_utils import fetch_and_insert_data
 from datetime import datetime, timezone
 from main import publish_kafka_messages, ProducerKafkaTopics
 
-def validate_assets(assets):
-    """
-    Validate that the provided assets exist in the holdings table.
-    For now, only validate symbols. Asset type validation will be added later.
-    """
-    log_message("Validating assets against the holdings table...")
-    log_message(f"Assets to validate: {assets}")
-
-    # Extract symbols from the assets list
-    symbols = [asset["symbol"] for asset in assets]
-
-    connection = get_db_connection()
-    cursor = connection.cursor()
-
-    try:
-        # Query to check which symbols exist in the holdings table
-        cursor.execute("""
-            SELECT DISTINCT symbol
-            FROM holdings
-            WHERE symbol = ANY(%s)
-        """.strip(), (symbols,))
-
-        # Extract valid symbols from the query result
-        valid_symbols = [row[0] for row in cursor.fetchall()]
-        invalid_symbols = set(symbols) - set(valid_symbols)
-
-        if invalid_symbols:
-            log_message(f"Warning: The following symbols do not exist in the holdings table and will be ignored: {invalid_symbols}")
-
-        # TODO: Add validation for asset_type in the future
-
-        # Return valid assets (filter by valid symbols)
-        valid_assets = [asset for asset in assets if asset["symbol"] in valid_symbols]
-        return valid_assets
-
-    except Exception as e:
-        log_message(f"Error validating assets: {e}")
-        raise
-    finally:
-        cursor.close()
-        connection.close()
-
 def get_assets_needing_update(assets):
     """
-    Fetch the list of assets that need price updates.
-    - Assets whose symbols do not exist in the market_data table.
-    - Assets whose updated_at timestamp is earlier than the most recent US market closing time.
+    Fetch the list of assets that need price updates from the watchlist_market_data table.
     """
-    log_message("Fetching assets that need price updates...")
-
-    # Extract symbols from the assets list
+    log_message("Fetching assets that need price updates from watchlist_market_data...")
     symbols = [asset["symbol"] for asset in assets]
-
-    # Calculate the most recent US market closing time
     most_recent_closing_time_utc = get_closest_us_market_closing_time()
 
     log_message(f"Most recent US market closing time in UTC: {most_recent_closing_time_utc}")
@@ -71,24 +25,17 @@ def get_assets_needing_update(assets):
     cursor = connection.cursor()
 
     try:
-        # Fetch symbols that either do not exist in market_data or have outdated timestamps
+        # Fetch symbols that either do not exist in watchlist_market_data or have outdated timestamps
         cursor.execute("""
-            SELECT DISTINCT t.symbol
-            FROM transactions t
-            LEFT JOIN market_data m ON t.symbol = m.symbol
-            WHERE t.symbol = ANY(%s) AND (m.symbol IS NULL OR m.updated_at < %s)
+            SELECT DISTINCT m.symbol
+            FROM market_data m
+            WHERE m.symbol = ANY(%s) AND (m.updated_at IS NULL OR m.updated_at < %s)
         """, (symbols, most_recent_closing_time_utc))
 
-        # Extract symbols from the query result
         symbols_needing_update = [row[0] for row in cursor.fetchall()]
         log_message(f"Found {len(symbols_needing_update)} symbols needing updates.")
 
-        # Filter assets by symbols needing updates
-        assets_needing_update = [asset for asset in assets if asset["symbol"] in symbols_needing_update]
-
-        # TODO: Add validation for asset_type in the future
-
-        return assets_needing_update
+        return [asset for asset in assets if asset["symbol"] in symbols_needing_update]
 
     except Exception as e:
         log_message(f"Error fetching assets needing updates: {e}")
@@ -97,61 +44,11 @@ def get_assets_needing_update(assets):
         cursor.close()
         connection.close()
 
-def fetch_data(asset):
+def insert_or_update_data(cursor, connection, processed_data):
     """
-    Fetch real-time data for a given asset.
-    """
-    symbol = asset["symbol"]
-    asset_type = asset["asset_type"]
-
-    try:
-        log_message(f"Fetching real-time price for symbol: {symbol}, asset_type: {asset_type}...")
-        if asset_type == "STOCK":
-            data = get_realtime_stock_data(symbol)
-        elif asset_type == "CRYPTO":
-            data = get_realtime_crypto_data(symbol)
-        else:
-            log_message(f"Unsupported asset type: {asset_type} for symbol: {symbol}. Skipping.")
-            return None
-
-        log_message(f"API response for symbol {symbol}: {data}")
-        return data
-
-    except Exception as e:
-        log_message(f"Error fetching data for symbol {symbol}: {e}")
-        raise
-
-
-def process_data(data, symbol):
-    """
-    Validate and process the API response data.
-    """
-    # Validate the API response
-    required_fields = ["close", "percent_change", "change", "high", "low"]
-    log_message(f"Validating required fields: {required_fields}")
-    for field in required_fields:
-        if field not in data or data[field] is None:
-            raise ValueError(f"Missing or invalid field '{field}' in API response for symbol {symbol}: {data}")
-
-    log_message(f"All required fields are present in the API response for symbol {symbol}.")
-
-    # Extract and process the fields
-    price = float(data["close"])  # Convert "close" to float
-    percent_change = float(data["percent_change"]) if data["percent_change"] else 0.0  # Convert "percent_change" to float or default to 0.0
-    change = float(data["change"]) if data["change"] else 0.0  # Convert "change" to float or default to 0.0
-    high = float(data["high"])  # Convert "high" to float
-    low = float(data["low"])  # Convert "low" to float
-
-    log_message(f"Extracted data for symbol {symbol}: price={price}, change={change}, "
-                f"percent_change={percent_change}, high={high}, low={low}")
-    return price, percent_change, change, high, low
-
-def insert_or_update_data(cursor, connection, symbol, asset_type, price, percent_change, change, high, low):
-    """
-    Insert or update the processed data into the database.
+    Insert or update the processed data into the watchlist_market_data table.
     """
     try:
-        # Insert or update the market_data table
         cursor.execute("""
             INSERT INTO market_data (symbol, asset_type, price, percent_change, change, high, low, updated_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
@@ -164,132 +61,65 @@ def insert_or_update_data(cursor, connection, symbol, asset_type, price, percent
                 low = EXCLUDED.low,
                 updated_at = EXCLUDED.updated_at,
                 asset_type = EXCLUDED.asset_type
-        """, (symbol, asset_type, price, percent_change, change, high, low, datetime.now(timezone.utc)))
+        """, (
+            processed_data["symbol"],
+            processed_data["asset_type"],
+            processed_data["price"],
+            processed_data["percent_change"],
+            processed_data["change"],
+            processed_data["high"],
+            processed_data["low"],
+            datetime.now(timezone.utc)
+        ))
         connection.commit()
-
-        log_message(f"Successfully inserted or updated data for symbol: {symbol}.")
+        log_message(f"Successfully inserted or updated data for symbol: {processed_data['symbol']}")
     except Exception as e:
-        log_message(f"Error inserting or updating data for symbol {symbol}: {e}")
+        log_message(f"Error inserting or updating data for symbol {processed_data['symbol']}: {e}")
         raise
-
-def fetch_and_insert_data(assets):
-    """
-    Fetch real-time prices for the given assets and insert them into the database.
-    Handles API rate limits by retrying failed requests after a delay.
-    """
-    log_message("Starting fetch_and_insert_data process...")
-    connection = get_db_connection()
-    cursor = connection.cursor()
-
-    try:
-        remaining_assets = assets  # Assets that still need to be fetched
-        max_retries = 3  # Maximum number of retries for each asset
-        retry_count = 0
-
-        while remaining_assets and retry_count < max_retries:
-            successfully_fetched = []  # Track assets successfully fetched in this iteration
-            failed_assets = []  # Track assets that failed in this iteration
-
-            for asset in remaining_assets:
-                symbol = asset["symbol"]
-                asset_type = asset["asset_type"]
-
-                try:
-                    # Fetch data
-                    data = fetch_data(asset)
-                    if not data:
-                        failed_assets.append(asset)
-                        continue
-
-                    # Process data
-                    price, percent_change, change, high, low = process_data(data, symbol)
-
-                    # Insert or update data
-                    insert_or_update_data(cursor, connection, symbol, asset_type, price, percent_change, change, high, low)
-
-                    successfully_fetched.append(asset)
-
-                except Exception as e:
-                    if "429" in str(e):
-                        log_message(f"Rate limit exceeded for symbol {symbol}. Retrying in 60 seconds...")
-                        failed_assets.append(asset)
-                    else:
-                        log_message(f"Error processing data for symbol {symbol}: {e}")
-                        failed_assets.append(asset)
-
-            # Update the remaining assets to only include those that failed
-            remaining_assets = failed_assets
-
-            if remaining_assets:
-                log_message(f"{len(remaining_assets)} assets failed to fetch. Retrying after 60 seconds...")
-                time.sleep(60)  # Wait before retrying
-                retry_count += 1
-
-        if remaining_assets:
-            log_message(f"Failed to fetch data for {len(remaining_assets)} assets after {max_retries} retries: {remaining_assets}")
-
-    except Exception as e:
-        log_message(f"Error during fetch_and_insert_data process: {e}")
-        raise
-    finally:
-        cursor.close()
-        connection.close()
-
-    log_message("fetch_and_insert_data process completed.")
-    
-def publish_price_update_complete(asset_names, asset_names_needing_update):
-    """
-    Publish a Kafka topic indicating that the price data is ready.
-    """
-    if not asset_names:
-        log_message("No asset names provided for Kafka topic publication.")
-        return
-
-    # Use the centralized publish_kafka_messages method
-    params = {"assets": asset_names, "updatedAssets": asset_names_needing_update, "status": "complete"}
-    publish_kafka_messages(ProducerKafkaTopics.MARKET_DATA_UPDATE_COMPLETE, params)
 
 def run(message_payload):
     """
     Main function to fetch and update asset prices.
     """
-    log_message("Starting update_market_data job...")
+    log_message("Starting fetch_watchlist_market_data job...")
     log_message(f"Received message payload: {message_payload}")
-    
+
     # Extract the list of assets from message_payload
     if isinstance(message_payload, dict) and "assets" in message_payload:
         assets = message_payload["assets"]
     else:
         log_message("Error: message_payload must be a dictionary with an 'assets' key.")
         return
-    
+
     log_message(f"Received assets: {assets}")
 
     if not isinstance(assets, list):
         log_message("Error: assets must be a list of dictionaries.")
         return
-    
-    # Validate assets
-    valid_assets = validate_assets(assets)
-    if not valid_assets:
-        log_message("No valid assets found. Exiting job.")
-        return
-    
+
     # Determine which assets need updates
-    assets_needing_update = get_assets_needing_update(valid_assets)
+    assets_needing_update = get_assets_needing_update(assets)
     if not assets_needing_update:
         log_message("No assets need updates. Exiting job.")
 
         # Publish Kafka topic
-        publish_price_update_complete(assets, [])
+        publish_kafka_messages(ProducerKafkaTopics.WATCHLIST_MARKET_DATA_UPDATE_COMPLETE, {"assets": assets, "status": "complete"})
+        return
 
-    else:
-        log_message(f"Assets needing updates: {assets_needing_update}")
+    log_message(f"Assets needing updates: {assets_needing_update}")
 
-        # Fetch and insert data
-        fetch_and_insert_data(assets_needing_update)
+    # Fetch and insert data
+    required_fields = ["symbol", "asset_type", "price", "percent_change", "change", "high", "low"]
+    fetch_and_insert_data(
+        assets_needing_update,
+        required_fields,
+        insert_or_update_data,
+        get_realtime_stock_data,
+        get_realtime_crypto_data,
+        get_realtime_forex_data
+    )
 
-        # Publish Kafka topic
-        publish_price_update_complete(assets, assets_needing_update)
+    # Publish Kafka topic
+    publish_kafka_messages(ProducerKafkaTopics.WATCHLIST_MARKET_DATA_UPDATE_COMPLETE, {"assets": assets, "updatedAssets": assets_needing_update, "status": "complete"})
 
-    log_message("update_market_data job completed successfully.")
+    log_message("fetch_watchlist_market_data job completed successfully.")
