@@ -84,17 +84,15 @@ def determine_symbols_needing_update(symbols, asset_type, start_date, end_date, 
             # Adjust the start_date and end_date for uncovered ranges
             log_message(f"Symbol {symbol} needs updates. Adjusted range: start_date={adjusted_start_date}, end_date={adjusted_end_date}")
             symbols_needing_update.append((symbol, adjusted_start_date, adjusted_end_date))
-            symbols_needing_update.append((symbol, adjusted_start_date, adjusted_end_date))
         else:
             # No data exists for this symbol, fetch the entire range
             log_message(f"No existing data for symbol {symbol}. Fetching full range: start_date={start_date_obj}, end_date={end_date_obj}")
-            symbols_needing_update.append((symbol, start_date_obj, end_date_obj))
             symbols_needing_update.append((symbol, start_date_obj, end_date_obj))
 
     return symbols_needing_update
 
 
-def fetch_and_insert_data(symbols_needing_update, asset_type, fetch_current_month_only):
+def fetch_and_insert_data(symbols_needing_update, asset_type):
     """
     Fetch missing data from the Twelve Data API and insert it into the database.
     """
@@ -104,17 +102,20 @@ def fetch_and_insert_data(symbols_needing_update, asset_type, fetch_current_mont
 
     try:
         for symbol, range_start, range_end in symbols_needing_update:
+            log_message(f"Processing symbol {symbol} with range: start_date={range_start}, end_date={range_end}")
+            adjusted_range_start, adjusted_range_end, fetch_current_month_only = adjust_date_range(range_start.strftime("%Y-%m-%d"), range_end.strftime("%Y-%m-%d"))
+            log_message(f"Adjusted range for symbol {symbol}: start_date={adjusted_range_start}, end_date={adjusted_range_end}, fetch_current_month_only={fetch_current_month_only}")
             retry_count = 0
             while retry_count < 3:
                 try:
-                    log_message(f"Fetching data for symbol {symbol} from {range_start.strftime('%Y-%m-%d')} to {range_end.strftime('%Y-%m-%d')}...")
+                    log_message(f"Fetching data for symbol {symbol} from {adjusted_range_start} to {adjusted_range_end}...")
                     if asset_type == 'STOCK':
-                        api_data = get_historical_stock_data(symbol, start_date=range_start.strftime('%Y-%m-%d'), end_date=range_end.strftime('%Y-%m-%d'))
+                        api_data = get_historical_stock_data(symbol, start_date=adjusted_range_start, end_date=adjusted_range_end)
                     elif asset_type == 'CRYPTO':
-                        api_data = get_historical_crypto_data(symbol, market="USD", start_date=range_start.strftime('%Y-%m-%d'), end_date=range_end.strftime('%Y-%m-%d'))
+                        api_data = get_historical_crypto_data(symbol, market="USD", start_date=adjusted_range_start, end_date=adjusted_range_end)
                     elif asset_type == 'FOREX':
                         from_symbol, to_symbol = symbol.split('/')
-                        api_data = get_historical_fx_data(from_symbol, to_symbol, start_date=range_start.strftime('%Y-%m-%d'), end_date=range_end.strftime('%Y-%m-%d'))
+                        api_data = get_historical_fx_data(from_symbol, to_symbol, start_date=adjusted_range_start, end_date=adjusted_range_end)
                     else:
                         log_message(f"Unsupported asset type: {asset_type}")
                         break
@@ -178,13 +179,11 @@ def fetch_historical_market_data(symbols, asset_type, start_date, end_date):
     """
     Fetch historical market data for the given symbols, asset type, and date range.
     """
-    start_date, end_date, fetch_current_month_only = adjust_date_range(start_date, end_date)
-    log_message(f"Adjusted date range: start_date={start_date}, end_date={end_date}, fetch_current_month_only={fetch_current_month_only}")
     existing_data_by_symbol = fetch_existing_data_ranges(symbols, asset_type)
     log_message(f"Existing data ranges: {existing_data_by_symbol}")
     symbols_needing_update = determine_symbols_needing_update(symbols, asset_type, start_date, end_date, existing_data_by_symbol)
     log_message(f"Symbols and date ranges needing updates: {symbols_needing_update}")
-    return fetch_and_insert_data(symbols_needing_update, asset_type, fetch_current_month_only)
+    return fetch_and_insert_data(symbols_needing_update, asset_type)
 
 
 def publish_market_data_monthly_complete(symbols, asset_type, start_date, end_date, record_count):
