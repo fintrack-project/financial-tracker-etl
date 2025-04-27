@@ -1,199 +1,35 @@
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from etl.utils import get_db_connection, log_message
+from etl.process_transactions_utils import (
+    get_assets_by_transaction_ids,
+    remove_all_holdings_for_account_if_no_transactions_exist,
+    get_all_accounts_and_assets,
+    remove_orphaned_data,
+    get_all_assets,
+    get_earliest_transaction_date,
+)
 from main import publish_kafka_messages, ProducerKafkaTopics
 
-def get_assets_by_transaction_ids(transaction_ids, deleted=False):
+def insert_or_update_holdings_monthly(cursor, account_id, asset_name, date, total_balance, unit, symbol):
     """
-    Retrieve asset names associated with the given transaction IDs.
-    
-    Parameters:
-        transaction_ids (list): List of transaction IDs to filter.
-        deleted (bool): If True, fetch deleted transactions. If False, fetch non-deleted transactions.
+    Insert or update a record in the holdings_monthly table.
     """
-    connection = get_db_connection()
-    cursor = connection.cursor()
-    try:
-        if deleted:
-            # Fetch deleted transactions
-            cursor.execute("""
-                SELECT DISTINCT asset_name
-                FROM transactions
-                WHERE transaction_id = ANY(%s) AND deleted_at IS NOT NULL
-            """, (transaction_ids,))
-        else:
-            # Fetch non-deleted transactions
-            cursor.execute("""
-                SELECT DISTINCT asset_name
-                FROM transactions
-                WHERE transaction_id = ANY(%s) AND deleted_at IS NULL
-            """, (transaction_ids,))
-        
-        return [row[0] for row in cursor.fetchall()]
-    finally:
-        cursor.close()
-        connection.close()
-
-def get_all_accounts_and_assets():
-    """
-    Retrieve all account IDs and their associated asset names from the transactions table.
-    """
-    connection = get_db_connection()
-    cursor = connection.cursor()
-    try:
-        cursor.execute("""
-            SELECT DISTINCT account_id, asset_name
-            FROM transactions
-            WHERE deleted_at IS NULL
-        """)
-        accounts_and_assets = cursor.fetchall()
-    finally:
-        cursor.close()
-        connection.close()
-    return accounts_and_assets
-
-def get_all_assets(account_id):
-    """
-    Retrieve all asset names for a given account_id.
-    """
-    connection = get_db_connection()
-    cursor = connection.cursor()
-    try:
-        cursor.execute("""
-            SELECT DISTINCT asset_name
-            FROM transactions
-            WHERE account_id = %s AND deleted_at IS NULL
-        """, (account_id,))
-        return [row[0] for row in cursor.fetchall()]
-    finally:
-        cursor.close()
-        connection.close()
-
-def get_earliest_transaction_date(account_id):
-    """
-    Retrieve the earliest transaction date for a given account_id.
-    """
-    connection = get_db_connection()
-    cursor = connection.cursor()
-    try:
-        cursor.execute("""
-            SELECT MIN(date)
-            FROM transactions
-            WHERE account_id = %s AND deleted_at IS NULL
-        """, (account_id,))
-        result = cursor.fetchone()
-        return result[0] if result else None
-    finally:
-        cursor.close()
-        connection.close()
+    log_message(f"Inserting or updating holdings_monthly for account_id: {account_id}, asset_name: {asset_name}, date: {date}, total_balance: {total_balance}, unit: {unit}, symbol: {symbol}")
+    cursor.execute("""
+        INSERT INTO holdings_monthly (account_id, asset_name, date, total_balance, unit, symbol)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        ON CONFLICT (account_id, asset_name, date) DO UPDATE
+        SET total_balance = EXCLUDED.total_balance,
+            unit = EXCLUDED.unit,
+            symbol = EXCLUDED.symbol
+    """, (account_id, asset_name, date, total_balance, unit, symbol))
 
 def align_to_first_day_of_month(date):
     """
     Align a given date to the 1st day of its month.
     """
     return date.replace(day=1)
-
-def remove_all_holdings_for_account_if_no_transactions_exist(account_id):
-    """
-    Check if no transactions exist for the given account_id.
-    If no transactions exist, remove all holdings and monthly holdings for that account.
-    """
-    connection = get_db_connection()
-    cursor = connection.cursor()
-
-    try:
-        log_message(f"Checking if any transactions exist for account_id: {account_id}...")
-
-        # Check if there are any non-deleted transactions for the account
-        cursor.execute("""
-            SELECT COUNT(*)
-            FROM transactions
-            WHERE account_id = %s AND deleted_at IS NULL
-        """, (account_id,))
-        transaction_count = cursor.fetchone()[0]
-
-        if transaction_count == 0:
-            log_message(f"No transactions found for account_id: {account_id}. Removing all holdings...")
-
-            # Remove all records from the holdings table
-            cursor.execute("""
-                DELETE FROM holdings
-                WHERE account_id = %s
-            """, (account_id,))
-            log_message(f"All holdings removed for account_id: {account_id}.")
-
-            # Remove all records from the holdings_monthly table
-            cursor.execute("""
-                DELETE FROM holdings_monthly
-                WHERE account_id = %s
-            """, (account_id,))
-            log_message(f"All monthly holdings removed for account_id: {account_id}.")
-
-            connection.commit()
-        else:
-            log_message(f"Transactions exist for account_id: {account_id}. No holdings were removed.")
-
-    except Exception as e:
-        log_message(f"Error while checking and removing holdings for account_id {account_id}: {e}")
-        connection.rollback()
-        raise
-    finally:
-        cursor.close()
-        connection.close()
-
-def remove_orphaned_monthly_holdings(account_id, assets):
-    """
-    Remove orphaned monthly holdings for assets that no longer have any transactions.
-    Log the orphaned records before deleting them.
-    """
-    if not assets:
-        log_message(f"No assets to process for account_id: {account_id}")
-        return
-
-    connection = get_db_connection()
-    cursor = connection.cursor()
-
-    try:
-        log_message(f"Checking for orphaned monthly holdings for account_id: {account_id}, assets: {assets}...")
-
-        # Fetch orphaned records
-        cursor.execute("""
-            SELECT account_id, asset_name, date, total_balance, unit, symbol
-            FROM holdings_monthly
-            WHERE account_id = %s AND asset_name = ANY(%s)
-            AND NOT EXISTS (
-                SELECT 1
-                FROM transactions
-                WHERE account_id = %s AND asset_name = holdings_monthly.asset_name AND deleted_at IS NULL
-            )
-        """, (account_id, assets, account_id))
-        orphaned_records = cursor.fetchall()
-
-        if orphaned_records:
-            log_message(f"Orphaned monthly holdings found for account_id: {account_id}: {orphaned_records}")
-
-            # Remove orphaned holdings
-            cursor.execute("""
-                DELETE FROM holdings_monthly
-                WHERE account_id = %s AND asset_name = ANY(%s)
-                AND NOT EXISTS (
-                    SELECT 1
-                    FROM transactions
-                    WHERE account_id = %s AND asset_name = holdings_monthly.asset_name AND deleted_at IS NULL
-                )
-            """, (account_id, assets, account_id))
-            log_message(f"Removed orphaned monthly holdings for account_id: {account_id}, assets: {assets}")
-        else:
-            log_message(f"No orphaned monthly holdings found for account_id: {account_id}, assets: {assets}")
-
-        connection.commit()
-    except Exception as e:
-        log_message(f"Error while removing orphaned monthly holdings: {e}")
-        connection.rollback()
-        raise
-    finally:
-        cursor.close()
-        connection.close()
 
 def remove_invalid_monthly_holdings(account_id, assets):
     """
@@ -299,17 +135,8 @@ def calculate_monthly_holdings(account_id, assets, start_date):
                     current_date += relativedelta(months=1)
                     continue
 
-                # Update the monthly holdings table
-                cursor.execute("""
-                    INSERT INTO holdings_monthly (account_id, asset_name, date, total_balance, unit, symbol)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (account_id, asset_name, date) DO UPDATE
-                    SET total_balance = EXCLUDED.total_balance,
-                        unit = EXCLUDED.unit,
-                        symbol = EXCLUDED.symbol
-                """, (account_id, asset_name, current_date, total_balance, unit, symbol))
-
-                log_message(f"Updated monthly holdings for account_id: {account_id}, asset_name: {asset_name}, date: {current_date}, total_balance: {total_balance}, unit: {unit}, symbol: {symbol}")
+                # Use the new method to insert or update the monthly holdings table
+                insert_or_update_holdings_monthly(cursor, account_id, asset_name, current_date, total_balance, unit, symbol)
 
                 # Move to the next month
                 current_date += relativedelta(months=1)
@@ -357,7 +184,7 @@ def run(message_payload=None):
         remove_all_holdings_for_account_if_no_transactions_exist(account_id)
 
         # Remove orphaned monthly holdings for deleted assets
-        remove_orphaned_monthly_holdings(account_id, deleted_assets)
+        remove_orphaned_data(account_id, deleted_assets, "holdings_monthly")
 
         # Remove invalid monthly holdings for both deleted and added assets
         remove_invalid_monthly_holdings(account_id, list(set(added_assets + deleted_assets)))

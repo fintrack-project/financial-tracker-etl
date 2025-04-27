@@ -3,40 +3,14 @@ import os
 from datetime import datetime
 from confluent_kafka import Producer
 from etl.utils import get_db_connection, log_message
+from etl.process_transactions_utils import (
+    get_assets_by_transaction_ids,
+    remove_all_holdings_for_account_if_no_transactions_exist,
+    remove_orphaned_data,
+)
 from main import publish_kafka_messages, ProducerKafkaTopics
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
-def get_assets_by_transaction_ids(transaction_ids, deleted=False):
-    """
-    Retrieve asset names associated with the given transaction IDs.
-    
-    Parameters:
-        transaction_ids (list): List of transaction IDs to filter.
-        deleted (bool): If True, fetch deleted transactions. If False, fetch non-deleted transactions.
-    """
-    connection = get_db_connection()
-    cursor = connection.cursor()
-    try:
-        if deleted:
-            # Fetch deleted transactions
-            cursor.execute("""
-                SELECT DISTINCT asset_name
-                FROM transactions
-                WHERE transaction_id = ANY(%s) AND deleted_at IS NOT NULL
-            """, (transaction_ids,))
-        else:
-            # Fetch non-deleted transactions
-            cursor.execute("""
-                SELECT DISTINCT asset_name
-                FROM transactions
-                WHERE transaction_id = ANY(%s) AND deleted_at IS NULL
-            """, (transaction_ids,))
-        
-        return [row[0] for row in cursor.fetchall()]
-    finally:
-        cursor.close()
-        connection.close()
 
 def insert_or_update_holding(cursor, account_id, asset_name, symbol, unit, total_balance):
     """
@@ -52,106 +26,6 @@ def insert_or_update_holding(cursor, account_id, asset_name, symbol, unit, total
             symbol = EXCLUDED.symbol,
             updated_at = EXCLUDED.updated_at
     """, (account_id, asset_name, symbol, total_balance, unit))
-
-def remove_all_holdings_for_account_if_no_transactions_exist(account_id):
-    """
-    Check if no transactions exist for the given account_id.
-    If no transactions exist, remove all holdings and monthly holdings for that account.
-    """
-    connection = get_db_connection()
-    cursor = connection.cursor()
-
-    try:
-        log_message(f"Checking if any transactions exist for account_id: {account_id}...")
-
-        # Check if there are any non-deleted transactions for the account
-        cursor.execute("""
-            SELECT COUNT(*)
-            FROM transactions
-            WHERE account_id = %s AND deleted_at IS NULL
-        """, (account_id,))
-        transaction_count = cursor.fetchone()[0]
-
-        if transaction_count == 0:
-            log_message(f"No transactions found for account_id: {account_id}. Removing all holdings...")
-
-            # Remove all records from the holdings table
-            cursor.execute("""
-                DELETE FROM holdings
-                WHERE account_id = %s
-            """, (account_id,))
-            log_message(f"All holdings removed for account_id: {account_id}.")
-
-            # Remove all records from the holdings_monthly table
-            cursor.execute("""
-                DELETE FROM holdings_monthly
-                WHERE account_id = %s
-            """, (account_id,))
-            log_message(f"All monthly holdings removed for account_id: {account_id}.")
-
-            connection.commit()
-        else:
-            log_message(f"Transactions exist for account_id: {account_id}. No holdings were removed.")
-
-    except Exception as e:
-        log_message(f"Error while checking and removing holdings for account_id {account_id}: {e}")
-        connection.rollback()
-        raise
-    finally:
-        cursor.close()
-        connection.close()
-
-def remove_orphaned_holdings(account_id, assets):
-    """
-    Remove orphaned records from the holdings table for the given account_id and assets.
-    Log the orphaned records before deleting them.
-    """
-    connection = get_db_connection()
-    cursor = connection.cursor()
-
-    try:
-        log_message(f"Checking for orphaned records in holdings for account_id: {account_id}, assets: {assets}...")
-
-        # Fetch orphaned records
-        cursor.execute("""
-            SELECT *
-            FROM holdings
-            WHERE account_id = %s AND asset_name = ANY(%s)
-            AND (account_id, asset_name) NOT IN (
-                SELECT account_id, asset_name
-                FROM transactions
-                WHERE account_id = %s AND deleted_at IS NULL
-                GROUP BY account_id, asset_name
-            )
-        """, (account_id, assets, account_id))
-        orphaned_records = cursor.fetchall()
-
-        if orphaned_records:
-            log_message(f"Orphaned records found for account_id: {account_id}, assets: {assets}: {orphaned_records}")
-
-            # Delete orphaned records
-            cursor.execute("""
-                DELETE FROM holdings
-                WHERE account_id = %s AND asset_name = ANY(%s)
-                AND (account_id, asset_name) NOT IN (
-                    SELECT account_id, asset_name
-                    FROM transactions
-                    WHERE account_id = %s AND deleted_at IS NULL
-                    GROUP BY account_id, asset_name
-                )
-            """, (account_id, assets, account_id))
-            log_message(f"Orphaned records deleted successfully for account_id: {account_id}, assets: {assets}.")
-        else:
-            log_message(f"No orphaned records found for account_id: {account_id}, assets: {assets}.")
-
-        connection.commit()
-    except Exception as e:
-        log_message(f"Error while removing orphaned records: {e}")
-        connection.rollback()
-        raise
-    finally:
-        cursor.close()
-        connection.close()
 
 def update_holdings(account_id):
     """
@@ -241,7 +115,7 @@ def run(message_payload):
     log_message(f"Processing account_id: {account_id} with added assets: {added_assets}, deleted assets: {deleted_assets}")
 
     # Step 4: Remove orphaned records from holdings
-    remove_orphaned_holdings(account_id, deleted_assets)
+    remove_orphaned_data(account_id, deleted_assets, "holdings")
 
     # Update holdings of account
     update_holdings(account_id)
