@@ -12,20 +12,21 @@ from main import publish_kafka_messages, ProducerKafkaTopics
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-def insert_or_update_holding(cursor, account_id, asset_name, symbol, unit, total_balance):
+def insert_or_update_holding(cursor, account_id, asset_name, symbol, unit, total_balance, asset_type):
     """
     Insert or update a holding record in the holdings table.
     """
-    log_message(f"Updating holdings for account_id: {account_id}, asset_name: {asset_name}, symbol: {symbol}, total_balance: {total_balance}, unit: {unit}")
+    log_message(f"Updating holdings for account_id: {account_id}, asset_name: {asset_name}, symbol: {symbol}, total_balance: {total_balance}, unit: {unit}, asset_type: {asset_type}")
     cursor.execute("""
-        INSERT INTO holdings (account_id, asset_name, symbol, total_balance, unit, updated_at)
-        VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+        INSERT INTO holdings (account_id, asset_name, symbol, total_balance, unit, asset_type, updated_at)
+        VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
         ON CONFLICT (account_id, asset_name) DO UPDATE
         SET total_balance = EXCLUDED.total_balance,
             unit = EXCLUDED.unit,
             symbol = EXCLUDED.symbol,
+            asset_type = EXCLUDED.asset_type,
             updated_at = EXCLUDED.updated_at
-    """, (account_id, asset_name, symbol, total_balance, unit))
+    """, (account_id, asset_name, symbol, total_balance, unit, asset_type))
 
 def update_holdings(account_id):
     """
@@ -56,19 +57,19 @@ def update_holdings(account_id):
         # Step 2: Calculate the total balance for each asset_name
         for asset_name in asset_names:
             cursor.execute("""
-                SELECT SUM(credit) - SUM(debit) AS total_balance, symbol, unit
+                SELECT SUM(credit) - SUM(debit) AS total_balance, symbol, unit, asset_type
                 FROM transactions
                 WHERE account_id = %s AND asset_name = %s AND deleted_at IS NULL
-                GROUP BY symbol, unit
+                GROUP BY symbol, unit, asset_type
             """, (account_id, asset_name))
             result = cursor.fetchone()
 
             if result:
-                total_balance, symbol, unit = result
-                log_message(f"Calculating total balance for account_id: {account_id}, asset_name: {asset_name}, total_balance: {total_balance}, symbol: {symbol}, unit: {unit}")
+                total_balance, symbol, unit, asset_type = result
+                log_message(f"Calculating total balance for asset_name: {asset_name}, total_balance: {total_balance}, symbol: {symbol}, unit: {unit}, asset_type: {asset_type}")
 
                 # Step 3: Insert or update the holdings table
-                insert_or_update_holding(cursor, account_id, asset_name, symbol, unit, total_balance)
+                insert_or_update_holding(cursor, account_id, asset_name, symbol, unit, total_balance, asset_type)
 
         # Commit the changes to the database
         connection.commit()

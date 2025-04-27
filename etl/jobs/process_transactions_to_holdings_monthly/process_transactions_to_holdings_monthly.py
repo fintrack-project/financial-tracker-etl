@@ -11,19 +11,20 @@ from etl.process_transactions_utils import (
 )
 from main import publish_kafka_messages, ProducerKafkaTopics
 
-def insert_or_update_holdings_monthly(cursor, account_id, asset_name, date, total_balance, unit, symbol):
+def insert_or_update_holdings_monthly(cursor, account_id, asset_name, date, total_balance, unit, symbol, asset_type):
     """
     Insert or update a record in the holdings_monthly table.
     """
-    log_message(f"Inserting or updating holdings_monthly for account_id: {account_id}, asset_name: {asset_name}, date: {date}, total_balance: {total_balance}, unit: {unit}, symbol: {symbol}")
+    log_message(f"Inserting or updating holdings_monthly for account_id: {account_id}, asset_name: {asset_name}, date: {date}, total_balance: {total_balance}, unit: {unit}, symbol: {symbol}, asset_type: {asset_type}")
     cursor.execute("""
-        INSERT INTO holdings_monthly (account_id, asset_name, date, total_balance, unit, symbol)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO holdings_monthly (account_id, asset_name, date, total_balance, unit, symbol, asset_type)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (account_id, asset_name, date) DO UPDATE
         SET total_balance = EXCLUDED.total_balance,
             unit = EXCLUDED.unit,
-            symbol = EXCLUDED.symbol
-    """, (account_id, asset_name, date, total_balance, unit, symbol))
+            symbol = EXCLUDED.symbol,
+            asset_type = EXCLUDED.asset_type
+    """, (account_id, asset_name, date, total_balance, unit, symbol, asset_type))
 
 def align_to_first_day_of_month(date):
     """
@@ -48,7 +49,7 @@ def remove_invalid_monthly_holdings(account_id, assets):
 
         # Fetch invalid holdings
         cursor.execute("""
-            SELECT hm.account_id, hm.asset_name, hm.date, hm.total_balance, hm.unit, hm.symbol
+            SELECT hm.account_id, hm.asset_name, hm.date, hm.total_balance, hm.unit, hm.symbol, hm.asset_type
             FROM holdings_monthly hm
             WHERE hm.account_id = %s AND hm.asset_name = ANY(%s)
             AND EXISTS (
@@ -102,7 +103,7 @@ def calculate_monthly_holdings(account_id, assets, start_date):
         for asset_name in assets:
             # Retrieve unit and symbol from the asset table
             cursor.execute("""
-                SELECT unit, symbol
+                SELECT unit, symbol, asset_type
                 FROM asset
                 WHERE account_id = %s AND asset_name = %s
             """, (account_id, asset_name))
@@ -111,7 +112,7 @@ def calculate_monthly_holdings(account_id, assets, start_date):
                 log_message(f"Error: Asset '{asset_name}' not found in the asset table for account_id: {account_id}.")
                 continue
 
-            unit, symbol = result
+            unit, symbol, asset_type = result
 
             # Align start_date to the 1st day of the month
             aligned_start_date = align_to_first_day_of_month(start_date)
@@ -136,7 +137,7 @@ def calculate_monthly_holdings(account_id, assets, start_date):
                     continue
 
                 # Use the new method to insert or update the monthly holdings table
-                insert_or_update_holdings_monthly(cursor, account_id, asset_name, current_date, total_balance, unit, symbol)
+                insert_or_update_holdings_monthly(cursor, account_id, asset_name, current_date, total_balance, unit, symbol, asset_type)
 
                 # Move to the next month
                 current_date += relativedelta(months=1)
