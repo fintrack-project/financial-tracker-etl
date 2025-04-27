@@ -13,9 +13,10 @@ from main import publish_kafka_messages, ProducerKafkaTopics
 
 def get_assets_needing_update(assets):
     """
-    Fetch the list of assets that need price updates from the watchlist_market_data table.
+    Fetch the list of assets that need price updates from the market_data table.
+    Includes symbols that do not exist in the table or have outdated timestamps.
     """
-    log_message("Fetching assets that need price updates from watchlist_market_data...")
+    log_message("Fetching assets that need price updates from market_data...")
     symbols = [asset["symbol"] for asset in assets]
     most_recent_closing_time_utc = get_closest_us_market_closing_time()
 
@@ -25,11 +26,15 @@ def get_assets_needing_update(assets):
     cursor = connection.cursor()
 
     try:
-        # Fetch symbols that either do not exist in watchlist_market_data or have outdated timestamps
+        # Fetch symbols that either do not exist in market_data or have outdated timestamps
         cursor.execute("""
-            SELECT DISTINCT m.symbol
-            FROM market_data m
-            WHERE m.symbol = ANY(%s) AND (m.updated_at IS NULL OR m.updated_at < %s)
+            WITH input_symbols AS (
+                SELECT UNNEST(%s::TEXT[]) AS symbol
+            )
+            SELECT s.symbol
+            FROM input_symbols s
+            LEFT JOIN market_data m ON s.symbol = m.symbol
+            WHERE m.symbol IS NULL OR m.updated_at < %s
         """, (symbols, most_recent_closing_time_utc))
 
         symbols_needing_update = [row[0] for row in cursor.fetchall()]
@@ -64,11 +69,11 @@ def insert_or_update_data(cursor, connection, asset, processed_data):
         """, (
             asset["symbol"],
             asset["asset_type"],
-            processed_data["price"],
-            processed_data["percent_change"],
-            processed_data["change"],
-            processed_data["high"],
-            processed_data["low"],
+            float(processed_data["close"]),
+            float(processed_data["percent_change"]),
+            float(processed_data["change"]),
+            float(processed_data["high"]),
+            float(processed_data["low"]),
             datetime.now(timezone.utc)
         ))
         connection.commit()
@@ -103,13 +108,13 @@ def run(message_payload):
         log_message("No assets need updates. Exiting job.")
 
         # Publish Kafka topic
-        publish_kafka_messages(ProducerKafkaTopics.WATCHLIST_MARKET_DATA_UPDATE_COMPLETE, {"assets": assets, "status": "complete"})
+        publish_kafka_messages(ProducerKafkaTopics.MARKET_DATA_UPDATE_COMPLETE, {"assets": assets, "status": "complete"})
         return
 
     log_message(f"Assets needing updates: {assets_needing_update}")
 
     # Fetch and insert data
-    required_fields = ["symbol", "price", "percent_change", "change", "high", "low"]
+    required_fields = ["symbol", "close", "percent_change", "change", "high", "low"]
     fetch_and_insert_data(
         assets_needing_update,
         required_fields,
@@ -120,6 +125,6 @@ def run(message_payload):
     )
 
     # Publish Kafka topic
-    publish_kafka_messages(ProducerKafkaTopics.WATCHLIST_MARKET_DATA_UPDATE_COMPLETE, {"assets": assets, "updatedAssets": assets_needing_update, "status": "complete"})
+    publish_kafka_messages(ProducerKafkaTopics.MARKET_DATA_UPDATE_COMPLETE, {"assets": assets, "updatedAssets": assets_needing_update, "status": "complete"})
 
     log_message("fetch_watchlist_market_data job completed successfully.")

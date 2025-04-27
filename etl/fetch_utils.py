@@ -31,13 +31,13 @@ def process_data(data, required_fields):
     Validate and process the API response data.
     """
     log_message(f"Validating required fields: {required_fields}")
+    processed_data = {}
+    
     for field in required_fields:
         if field not in data or data[field] is None:
             raise ValueError(f"Missing or invalid field '{field}' in API response: {data}")
-
-    # Extract and process the fields
-    processed_data = {field: float(data[field]) if isinstance(data[field], (int, float, str)) else data[field]
-                      for field in required_fields}
+        # Extract and process the fields
+        processed_data[field] = data[field]
     log_message(f"Processed data: {processed_data}")
     return processed_data
 
