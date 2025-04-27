@@ -83,7 +83,7 @@ def fetch_and_insert_data(assets, required_fields, insert_or_update_data, get_re
                     processed_data = process_data(data, required_fields)
 
                     # Insert or update data
-                    insert_or_update_data(cursor, connection, processed_data)
+                    insert_or_update_data(cursor, connection, asset, processed_data)
 
                     successfully_fetched.append(asset)
 

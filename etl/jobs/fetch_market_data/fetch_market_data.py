@@ -44,7 +44,7 @@ def get_assets_needing_update(assets):
         cursor.close()
         connection.close()
 
-def insert_or_update_data(cursor, connection, processed_data):
+def insert_or_update_data(cursor, connection, asset, processed_data):
     """
     Insert or update the processed data into the watchlist_market_data table.
     """
@@ -62,8 +62,8 @@ def insert_or_update_data(cursor, connection, processed_data):
                 updated_at = EXCLUDED.updated_at,
                 asset_type = EXCLUDED.asset_type
         """, (
-            processed_data["symbol"],
-            processed_data["asset_type"],
+            asset["symbol"],
+            asset["asset_type"],
             processed_data["price"],
             processed_data["percent_change"],
             processed_data["change"],
@@ -72,9 +72,9 @@ def insert_or_update_data(cursor, connection, processed_data):
             datetime.now(timezone.utc)
         ))
         connection.commit()
-        log_message(f"Successfully inserted or updated data for symbol: {processed_data['symbol']}")
+        log_message(f"Successfully inserted or updated data for symbol: {asset['symbol']}")
     except Exception as e:
-        log_message(f"Error inserting or updating data for symbol {processed_data['symbol']}: {e}")
+        log_message(f"Error inserting or updating data for symbol {asset['symbol']}: {e}")
         raise
 
 def run(message_payload):
@@ -109,7 +109,7 @@ def run(message_payload):
     log_message(f"Assets needing updates: {assets_needing_update}")
 
     # Fetch and insert data
-    required_fields = ["symbol", "asset_type", "price", "percent_change", "change", "high", "low"]
+    required_fields = ["symbol", "price", "percent_change", "change", "high", "low"]
     fetch_and_insert_data(
         assets_needing_update,
         required_fields,
