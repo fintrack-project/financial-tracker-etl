@@ -1,32 +1,133 @@
-# ETL Pipeline for FinTrack
+# Financial Tracker ETL Pipeline
 
-The ETL (Extract, Transform, Load) pipeline is a crucial component of the FinTrack project, responsible for fetching, processing, and storing financial data from various sources. This document provides an overview of the ETL pipeline's functionality and usage.
+The Financial Tracker ETL (Extract, Transform, Load) pipeline is a robust system designed to automate the ingestion, processing, and storage of financial data. This pipeline supports various financial data sources, processes transactions, and ensures the data is ready for analysis and reporting.
 
-## Overview
+## **Overview**
 
-The ETL pipeline consists of three main scripts:
+The ETL pipeline is a critical component of the Financial Tracker project, enabling seamless data integration and management. It consists of multiple jobs and utilities that handle the following tasks:
 
-1. **fetch_data.py**: This script is responsible for extracting live market data from financial APIs. It connects to the specified APIs, retrieves the necessary data, and prepares it for processing.
+1. **Data Extraction**:
+   - Fetches live market data from APIs.
+   - Retrieves historical data for financial assets.
+   - Processes user transactions for holdings and monthly summaries.
 
-2. **process_data.py**: After fetching the data, this script processes it to ensure it is in the correct format for storage. This may include data cleaning, transformation, and validation steps.
+2. **Data Transformation**:
+   - Cleans and validates raw data.
+   - Transforms data into a structured format for storage.
+   - Aggregates and calculates monthly holdings and balances.
 
-3. **store_data.py**: The final script in the pipeline stores the processed data into the PostgreSQL database. It handles the database connection and executes the necessary SQL commands to insert the data.
+3. **Data Loading**:
+   - Stores processed data into a PostgreSQL database.
+   - Ensures data consistency and integrity with relational constraints.
 
-## Usage
+## **Key Components**
 
-To run the ETL pipeline, follow these steps:
+### **1. ETL Jobs**
+The project includes several ETL jobs, each responsible for a specific part of the pipeline:
 
-1. Ensure that the PostgreSQL database is set up and running.
-2. Update the configuration settings in the scripts as needed (e.g., API keys, database connection details).
-3. Execute the scripts in the following order:
-   - Run `fetch_data.py` to extract the data.
-   - Run `process_data.py` to transform the data.
-   - Run `store_data.py` to load the data into the database.
+- **`fetch_historical_market_data`**:
+  - Fetches historical market data for financial assets (e.g., stocks, forex, crypto).
+  - Identifies missing data ranges and updates the database accordingly.
 
-## Docker
+- **`process_transactions_to_holdings`**:
+  - Processes user transactions to calculate current holdings.
+  - Updates the `holdings` table with the latest balances.
 
-The ETL pipeline can be containerized using Docker. The provided Dockerfile in this directory can be used to build a Docker image for the ETL pipeline, allowing for consistent deployment and execution across different environments.
+- **`process_transactions_to_holdings_monthly`**:
+  - Aggregates transactions to calculate monthly holdings.
+  - Updates the `holdings_monthly` table for historical tracking.
 
-## Conclusion
+- **`generate_mock_transactions`**:
+  - Generates mock transaction data for testing purposes.
+  - Supports cash and stock transactions with customizable parameters.
 
-The ETL pipeline is essential for ensuring that the FinTrack application has access to up-to-date financial data. By automating the data extraction, transformation, and loading processes, the pipeline helps users make informed investment decisions based on real-time information.
+### **2. Utilities**
+The project includes reusable utilities to support ETL operations:
+
+- **Database Utilities**:
+  - Handles database connections and query execution.
+  - Ensures efficient interaction with the PostgreSQL database.
+
+- **Logging**:
+  - Provides centralized logging for debugging and monitoring.
+
+- **Kafka Integration**:
+  - Publishes messages to Kafka topics to signal job completion or trigger downstream processes.
+
+### **3. Database Schema**
+The pipeline interacts with the following key tables:
+
+- **`transactions`**:
+  - Stores user transactions, including credits and debits for assets.
+
+- **`holdings`**:
+  - Tracks the current balance of assets for each account.
+
+- **`holdings_monthly`**:
+  - Tracks monthly balances for assets, enabling historical analysis.
+
+- **`asset`**:
+  - Stores metadata about financial assets, such as symbols, units, and types.
+
+- **`market_data`**:
+  - Stores live and historical market data for financial assets.
+
+## **Usage**
+
+### **1. Prerequisites**
+- **Python 3.x**: Ensure Python is installed on your system.
+- **PostgreSQL**: Set up a PostgreSQL database for storing financial data.
+- **Docker (Optional)**: Use Docker for containerized deployment.
+
+### **2. Running the ETL Pipeline**
+To execute the ETL pipeline, follow these steps:
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-repo/financial-tracker-etl.git
+   cd financial-tracker-etl
+
+2. Install dependencies:
+   pip install -r requirements.txt
+
+3. Configure environment variables:
+
+- Set up database connection details<vscode_annotation details='%5B%7B%22title%22%3A%22hardcoded-credentials%22%2C%22description%22%3A%22Embedding%20credentials%20in%20source%20code%20risks%20unauthorized%20access%22%7D%5D'> (</vscode_annotation>e.g., DB_HOST, DB_USER, DB_PASSWORD).
+- Add API keys for financial data sources if required.
+4. Run individual ETL jobs:
+
+- Fetch historical market data:
+python etl/jobs/fetch_historical_market_data/fetch_historical_market_data.py
+
+- Process transactions to holdings:
+python etl/jobs/process_transactions_to_holdings/process_transactions_to_holdings.py
+
+- Process transactions to monthly holdings:
+python etl/jobs/process_transactions_to_holdings_monthly/process_transactions_to_holdings_monthly.py
+
+### **3. Docker Deployment**
+The ETL pipeline can be containerized using Docker for consistent deployment across environments. Use the provided Dockerfile to build and run the pipeline:
+
+docker build -t financial-tracker-etl .
+docker run -e DB_HOST=<db_host> -e DB_USER=<db_user> -e DB_PASSWORD=<db_password> financial-tracker-etl
+
+## **Project Structure**
+
+financial-tracker-etl/
+├── etl/
+│   ├── jobs/
+│   │   ├── fetch_historical_market_data/
+│   │   ├── process_transactions_to_holdings/
+│   │   ├── process_transactions_to_holdings_monthly/
+│   │   ├── generate_mock_transactions.py
+│   ├── utils/
+│   │   ├── db_utils.py
+│   │   ├── log_utils.py
+│   │   ├── process_transactions_utils.py
+├── Dockerfile
+├── requirements.txt
+├── README.md
+
+## **License**
+
+This project is licensed under the MIT License. See the LICENSE file for details.
