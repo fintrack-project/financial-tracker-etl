@@ -37,21 +37,22 @@ def adjust_date_range(start_date, end_date):
 
 def fetch_existing_data_ranges(symbols, asset_type):
     """
-    Fetch existing data ranges from the database for the given symbols and asset type.
+    Fetch all available dates from the database for the given symbols and asset type.
+    Returns a dict: {symbol: set([date1, date2, ...]), ...}
     """
     connection = get_db_connection()
     cursor = connection.cursor()
     try:
         cursor.execute("""
-            SELECT symbol, MIN(date) AS min_date, MAX(date) AS max_date
+            SELECT symbol, date
             FROM market_data_monthly
             WHERE symbol = ANY(%s) AND asset_type = %s
-            GROUP BY symbol
         """, (symbols, asset_type))
-        existing_data_ranges = cursor.fetchall()
-        return {
-            row[0]: {"min_date": row[1], "max_date": row[2]} for row in existing_data_ranges
-        }
+        rows = cursor.fetchall()
+        data_by_symbol = {}
+        for symbol, date in rows:
+            data_by_symbol.setdefault(symbol, set()).add(date)
+        return data_by_symbol
     finally:
         cursor.close()
         connection.close()
@@ -60,34 +61,33 @@ def fetch_existing_data_ranges(symbols, asset_type):
 def determine_symbols_needing_update(symbols, asset_type, start_date, end_date, existing_data_by_symbol):
     """
     Determine which symbols and date ranges need updates based on existing data.
+    - Only fetch missing months to reduce API calls
     """
+    from dateutil.relativedelta import relativedelta
     symbols_needing_update = []
     start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date().replace(day=1)
     end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date().replace(day=1)
+    
+    def month_range(start, end):
+        months = []
+        current = start
+        while current <= end:
+            months.append(current)
+            current += relativedelta(months=1)
+        return months
 
     for symbol in symbols:
-        if symbol in existing_data_by_symbol:
-            existing_min_date = existing_data_by_symbol[symbol]["min_date"]
-            existing_max_date = existing_data_by_symbol[symbol]["max_date"]
-
-            log_message(f"Existing data for symbol {symbol}: min_date={existing_min_date}, max_date={existing_max_date}")
-            log_message(f"Requested range: start_first_date={start_date_obj}, end_first_date={end_date_obj}")
-
-            # Check if the requested range is fully covered
-            if existing_min_date <= start_date_obj and existing_max_date >= end_date_obj:
-                log_message(f"Data for symbol {symbol} is fully covered in the database. Skipping API call.")
-                continue
-
-            adjusted_start_date = min(existing_min_date, start_date_obj) if existing_min_date else start_date_obj
-            adjusted_end_date = max(existing_max_date, end_date_obj) if existing_max_date else end_date_obj
-
-            # Adjust the start_date and end_date for uncovered ranges
-            log_message(f"Symbol {symbol} needs updates. Adjusted range: start_date={adjusted_start_date}, end_date={adjusted_end_date}")
-            symbols_needing_update.append((symbol, adjusted_start_date, adjusted_end_date))
+        expected_dates = set(month_range(start_date_obj, end_date_obj))
+        existing_dates = existing_data_by_symbol.get(symbol, set())
+        missing_dates = expected_dates - existing_dates
+        
+        if not missing_dates:
+            log_message(f"Data for symbol {symbol} is fully covered in the database. Skipping API call.")
+            continue
         else:
-            # No data exists for this symbol, fetch the entire range
-            log_message(f"No existing data for symbol {symbol}. Fetching full range: start_date={start_date_obj}, end_date={end_date_obj}")
-            symbols_needing_update.append((symbol, start_date_obj, end_date_obj))
+            log_message(f"Symbol {symbol} is missing data for months: {sorted(missing_dates)}")
+            # Fetch the full missing range (from min to max missing month)
+            symbols_needing_update.append((symbol, min(missing_dates), max(missing_dates)))
 
     return symbols_needing_update
 
