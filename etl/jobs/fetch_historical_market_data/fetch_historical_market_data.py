@@ -150,10 +150,14 @@ def fetch_and_insert_data(symbols_needing_update, asset_type):
                         log_message(f"Fetched data: {data}")
                     break
                 except Exception as e:
-                    if "429" in str(e):
+                    error_str = str(e)
+                    if "429" in error_str:
                         log_message(f"Rate limit exceeded for symbol {symbol}. Retrying in 60 seconds...")
                         time.sleep(60)
                         retry_count += 1
+                    elif "404" in error_str or "code': 404" in error_str:
+                        log_message(f"Symbol {symbol} not found (404 error). Skipping this symbol.")
+                        break  # No need to retry for non-existent symbols
                     else:
                         log_message(f"Error fetching data for symbol {symbol}: {e}")
                         break
