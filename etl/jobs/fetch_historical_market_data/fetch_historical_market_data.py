@@ -7,7 +7,6 @@ from utils import (
     get_historical_crypto_data,
     get_historical_fx_data,
     get_db_connection,
-    get_closest_us_market_closing_time
 )
 from main import publish_kafka_messages, ProducerKafkaTopics
 
