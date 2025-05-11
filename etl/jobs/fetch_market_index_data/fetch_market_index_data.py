@@ -1,29 +1,27 @@
-from datetime import datetime, timezone, timedelta
-import pytz
-from dotenv import load_dotenv
-from etl.utils import get_db_connection, log_message, load_env_variables, quote_market_index_data, get_closest_us_market_closing_time
+from datetime import datetime, timezone
+from etl.utils import get_db_connection, log_message, load_env_variables, quote_market_index_data
+from etl.fetch_utils import get_existing_data
 from main import publish_kafka_messages, ProducerKafkaTopics
 
 # Load environment variables from .env file
 env_vars = load_env_variables()
 
-def get_existing_market_index_data(symbols, closest_closing_time):
+def get_existing_market_index_data(symbols):
     """
-    Check if market index data exists for the closest US market closing time.
+    Check if market index data exists for the given symbols.
+    Now only checks if the symbols exist in the database, as the frontend handles refresh cycles.
     """
     log_message("Checking existing market index data...")
     connection = get_db_connection()
     cursor = connection.cursor()
 
     try:
-        log_message(f"Closest US market closing time: {closest_closing_time}")
-        log_message(f"Compare against the previous day: {closest_closing_time - timedelta(days=1)}")
         log_message(f"Symbols to check: {symbols}")
         cursor.execute("""
             SELECT symbol, price, price_change, percent_change, price_high, price_low, updated_at
             FROM market_index_data
-            WHERE symbol = ANY(%s) AND updated_at >= %s
-        """, (symbols, closest_closing_time - timedelta(days=1)))
+            WHERE symbol = ANY(%s)
+        """, (symbols,))
 
         existing_data = cursor.fetchall()
         log_message(f"Found {len(existing_data)} existing market index data records.")
@@ -146,18 +144,13 @@ def run(message_payload):
 
     log_message("Starting fetch_market_index_data job...")
 
-    # Determine the closest US market closing time
-    closest_closing_time_utc = get_closest_us_market_closing_time()
-    log_message(f"Closest US market closing time in UTC: {closest_closing_time_utc}")
-
     # Check existing data
-    existing_data = get_existing_market_index_data(symbols, closest_closing_time_utc)
+    existing_data = get_existing_market_index_data(symbols)
     if len(existing_data) == len(symbols):
-        log_message("All market index data is up-to-date. Using existing data.")
+        log_message("All market index data exists. Using existing data.")
         publish_market_index_data_update_complete(existing_data)
-
     else:
-        log_message("Market index data is not up-to-date. Quoting new data...")
+        log_message("Some market index data is missing. Quoting new data...")
 
         # Quote market data and process it if necessary
         raw_data = quote_market_index_data(symbols)

@@ -323,33 +323,3 @@ def get_historical_fx_data(from_symbol, to_symbol, start_date=None, end_date=Non
     except requests.exceptions.RequestException as e:
         log_message(f"Error fetching historical forex data for pair {from_symbol}/{to_symbol}: {e}")
         raise
-
-def get_closest_us_market_closing_time(reference_date=None):
-    """
-    Calculate the most recent US market closing time (4:00 PM EDT) relative to a given date.
-    If no date is provided, use the current time.
-    
-    Args:
-        reference_date (datetime, optional): The reference date to calculate the closest market closing time. Defaults to the current time in US Eastern timezone.
-    
-    Returns:
-        datetime: The closest US market closing time in UTC.
-    """
-    eastern = pytz.timezone("US/Eastern")
-    utc = pytz.utc
-
-    # Use the provided reference date or default to the current time
-    if reference_date is None:
-        reference_date = datetime.now(eastern)
-    else:
-        # Ensure the reference_date is in the US Eastern timezone
-        reference_date = reference_date.astimezone(eastern)
-
-    if reference_date.hour < 16:  # Before today's market closing time
-        # Use yesterday's closing time
-        closest_closing_time = (reference_date - timedelta(days=1)).replace(hour=16, minute=0, second=0, microsecond=0)
-    else:  # After today's market closing time
-        # Use today's closing time
-        closest_closing_time = reference_date.replace(hour=16, minute=0, second=0, microsecond=0)
-
-    return closest_closing_time.astimezone(utc)

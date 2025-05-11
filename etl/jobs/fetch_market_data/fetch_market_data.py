@@ -4,54 +4,33 @@ from etl.utils import (
     log_message,
     get_realtime_stock_data,
     get_realtime_crypto_data,
-    get_realtime_forex_data,
-    get_closest_us_market_closing_time
+    get_realtime_forex_data
 )
-from etl.fetch_utils import fetch_and_insert_data
+from etl.fetch_utils import (
+    fetch_and_insert_data,
+    get_existing_data
+)
 from datetime import datetime, timezone
 from main import publish_kafka_messages, ProducerKafkaTopics
 
 def get_assets_needing_update(assets):
     """
     Fetch the list of assets that need price updates from the market_data table.
-    Includes symbols that do not exist in the table or have outdated timestamps.
+    Now only checks if the symbol exists in the database, as the frontend handles refresh cycles.
     """
     log_message("Fetching assets that need price updates from market_data...")
     symbols = [asset["symbol"] for asset in assets]
-    most_recent_closing_time_utc = get_closest_us_market_closing_time()
 
-    log_message(f"Most recent US market closing time in UTC: {most_recent_closing_time_utc}")
+    # Get existing symbols from market_data table
+    existing_symbols = get_existing_data(symbols, "market_data")
+    symbols_needing_update = [symbol for symbol in symbols if symbol not in existing_symbols]
+    log_message(f"Found {len(symbols_needing_update)} symbols needing updates.")
 
-    connection = get_db_connection()
-    cursor = connection.cursor()
-
-    try:
-        # Fetch symbols that either do not exist in market_data or have outdated timestamps
-        cursor.execute("""
-            WITH input_symbols AS (
-                SELECT UNNEST(%s::TEXT[]) AS symbol
-            )
-            SELECT s.symbol
-            FROM input_symbols s
-            LEFT JOIN market_data m ON s.symbol = m.symbol
-            WHERE m.symbol IS NULL OR m.updated_at < %s
-        """, (symbols, most_recent_closing_time_utc))
-
-        symbols_needing_update = [row[0] for row in cursor.fetchall()]
-        log_message(f"Found {len(symbols_needing_update)} symbols needing updates.")
-
-        return [asset for asset in assets if asset["symbol"] in symbols_needing_update]
-
-    except Exception as e:
-        log_message(f"Error fetching assets needing updates: {e}")
-        raise
-    finally:
-        cursor.close()
-        connection.close()
+    return [asset for asset in assets if asset["symbol"] in symbols_needing_update]
 
 def insert_or_update_data(cursor, connection, asset, processed_data):
     """
-    Insert or update the processed data into the watchlist_market_data table.
+    Insert or update the processed data into the market_data table.
     """
     try:
         cursor.execute("""
@@ -86,7 +65,7 @@ def run(message_payload):
     """
     Main function to fetch and update asset prices.
     """
-    log_message("Starting fetch_watchlist_market_data job...")
+    log_message("Starting fetch_market_data job...")
     log_message(f"Received message payload: {message_payload}")
 
     # Extract the list of assets from message_payload
@@ -127,4 +106,4 @@ def run(message_payload):
     # Publish Kafka topic
     publish_kafka_messages(ProducerKafkaTopics.MARKET_DATA_UPDATE_COMPLETE, {"assets": assets, "updatedAssets": assets_needing_update, "status": "complete"})
 
-    log_message("fetch_watchlist_market_data job completed successfully.")
+    log_message("fetch_market_data job completed successfully.")
