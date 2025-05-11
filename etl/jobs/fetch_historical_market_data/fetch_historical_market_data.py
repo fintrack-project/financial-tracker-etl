@@ -1,97 +1,23 @@
 import time
-from datetime import datetime, timedelta
-from dateutil.relativedelta import relativedelta
-from utils import (
+from datetime import datetime
+from etl.utils import (
     log_message,
     get_historical_stock_data,
     get_historical_crypto_data,
     get_historical_fx_data,
     get_db_connection,
 )
+from etl.fetch_utils import (
+    get_existing_data_ranges,
+    adjust_date_range,
+    determine_symbols_needing_update,
+    handle_api_error
+)
 from main import publish_kafka_messages, ProducerKafkaTopics
 
 
 # --- Utility Functions ---
-def adjust_date_range(start_date, end_date):
-    """
-    Adjust the start_date and end_date to handle edge cases:
-    - Ensure start_date is the first day of its month.
-    - Ensure the interval is at least 1 month.
-    - Include the first day of the current month if the current date is after the first day.
-    - Prevent requests for future dates.
-    """
-    # Set start_date to the first day of its month
-    start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date().replace(day=1)
-    end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
-    current_date = datetime.now().date()
-
-    if end_date_obj >= current_date.replace(day=1):
-        end_date_obj = current_date
-
-    # Handle special case: start_date and end_date are the same
-    fetch_current_month_only = (start_date_obj == end_date_obj)
-
-    return start_date_obj.strftime("%Y-%m-%d"), end_date_obj.strftime("%Y-%m-%d"), fetch_current_month_only
-
-
-def fetch_existing_data_ranges(symbols, asset_type):
-    """
-    Fetch all available dates from the database for the given symbols and asset type.
-    Returns a dict: {symbol: set([date1, date2, ...]), ...}
-    """
-    connection = get_db_connection()
-    cursor = connection.cursor()
-    try:
-        cursor.execute("""
-            SELECT symbol, date
-            FROM market_data_monthly
-            WHERE symbol = ANY(%s) AND asset_type = %s
-        """, (symbols, asset_type))
-        rows = cursor.fetchall()
-        data_by_symbol = {}
-        for symbol, date in rows:
-            data_by_symbol.setdefault(symbol, set()).add(date)
-        return data_by_symbol
-    finally:
-        cursor.close()
-        connection.close()
-
-
-def determine_symbols_needing_update(symbols, asset_type, start_date, end_date, existing_data_by_symbol):
-    """
-    Determine which symbols and date ranges need updates based on existing data.
-    - Only fetch missing months to reduce API calls
-    """
-    from dateutil.relativedelta import relativedelta
-    symbols_needing_update = []
-    start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date().replace(day=1)
-    end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date().replace(day=1)
-    
-    def month_range(start, end):
-        months = []
-        current = start
-        while current <= end:
-            months.append(current)
-            current += relativedelta(months=1)
-        return months
-
-    for symbol in symbols:
-        expected_dates = set(month_range(start_date_obj, end_date_obj))
-        existing_dates = existing_data_by_symbol.get(symbol, set())
-        missing_dates = expected_dates - existing_dates
-        
-        if not missing_dates:
-            log_message(f"Data for symbol {symbol} is fully covered in the database. Skipping API call.")
-            continue
-        else:
-            log_message(f"Symbol {symbol} is missing data for months: {sorted(missing_dates)}")
-            # Fetch the full missing range (from min to max missing month)
-            symbols_needing_update.append((symbol, min(missing_dates), max(missing_dates)))
-
-    return symbols_needing_update
-
-
-def fetch_and_insert_data(symbols_needing_update, asset_type):
+def fetch_and_insert_data(symbols_needing_update, asset_type, max_retries=3, retry_delay=60):
     """
     Fetch missing data from the Twelve Data API and insert it into the database.
     """
@@ -105,7 +31,8 @@ def fetch_and_insert_data(symbols_needing_update, asset_type):
             adjusted_range_start, adjusted_range_end, fetch_current_month_only = adjust_date_range(range_start.strftime("%Y-%m-%d"), range_end.strftime("%Y-%m-%d"))
             log_message(f"Adjusted range for symbol {symbol}: start_date={adjusted_range_start}, end_date={adjusted_range_end}, fetch_current_month_only={fetch_current_month_only}")
             retry_count = 0
-            while retry_count < 3:
+            
+            while retry_count < max_retries:
                 try:
                     log_message(f"Fetching data for symbol {symbol} from {adjusted_range_start} to {adjusted_range_end}...")
                     if asset_type == 'STOCK':
@@ -148,29 +75,43 @@ def fetch_and_insert_data(symbols_needing_update, asset_type):
                     for data in fetched_data:
                         log_message(f"Fetched data: {data}")
                     break
+
                 except Exception as e:
-                    error_str = str(e)
-                    if "429" in error_str:
-                        log_message(f"Rate limit exceeded for symbol {symbol}. Retrying in 60 seconds...")
-                        time.sleep(60)
+                    should_retry, error_message = handle_api_error(e, symbol, retry_count, max_retries, retry_delay)
+                    if should_retry:
                         retry_count += 1
-                    elif "404" in error_str or "code': 404" in error_str:
-                        log_message(f"Symbol {symbol} not found (404 error). Skipping this symbol.")
-                        break  # No need to retry for non-existent symbols
+                        time.sleep(retry_delay)
                     else:
-                        log_message(f"Error fetching data for symbol {symbol}: {e}")
+                        log_message(error_message)
                         break
 
+        # Insert the fetched data into the database
         if fetched_data:
-            log_message(f"Inserting {len(fetched_data)} new records into the database...")
-            for record in fetched_data:
-                cursor.execute("""
-                    INSERT INTO market_data_monthly (symbol, price, date, asset_type)
-                    VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (symbol, date, asset_type) DO NOTHING
-                """, (record["symbol"], record["price"], record["date"], record["asset_type"]))
-            connection.commit()
+            try:
+                for data in fetched_data:
+                    cursor.execute("""
+                        INSERT INTO market_data_monthly (symbol, price, date, asset_type)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (symbol, date)
+                        DO UPDATE SET
+                            price = EXCLUDED.price,
+                            asset_type = EXCLUDED.asset_type
+                    """, (
+                        data["symbol"],
+                        data["price"],
+                        data["date"],
+                        data["asset_type"]
+                    ))
+                connection.commit()
+                log_message("Successfully inserted historical data into the database.")
+            except Exception as e:
+                connection.rollback()
+                log_message(f"Error inserting historical data into the database: {e}")
+                raise
 
+    except Exception as e:
+        log_message(f"Error during fetch_and_insert_data process: {e}")
+        raise
     finally:
         cursor.close()
         connection.close()
@@ -182,30 +123,25 @@ def fetch_historical_market_data(symbols, asset_type, start_date, end_date):
     """
     Fetch historical market data for the given symbols, asset type, and date range.
     """
-    existing_data_by_symbol = fetch_existing_data_ranges(symbols, asset_type)
+    existing_data_by_symbol = get_existing_data_ranges(symbols, "market_data_monthly", asset_type)
     log_message(f"Existing data ranges: {existing_data_by_symbol}")
-    symbols_needing_update = determine_symbols_needing_update(symbols, asset_type, start_date, end_date, existing_data_by_symbol)
+    symbols_needing_update = determine_symbols_needing_update(symbols, start_date, end_date, existing_data_by_symbol)
     log_message(f"Symbols and date ranges needing updates: {symbols_needing_update}")
     return fetch_and_insert_data(symbols_needing_update, asset_type)
 
 
 def publish_market_data_monthly_complete(symbols, asset_type, start_date, end_date, record_count):
     """
-    Publish a Kafka topic indicating that the historical market data is ready.
+    Publish a Kafka topic indicating that the historical market data update is complete.
     """
-    if not symbols:
-        log_message("No symbols provided for Kafka topic publication.")
-        return
-
-    params = {
+    message_payload = {
         "symbols": symbols,
         "asset_type": asset_type,
         "start_date": start_date,
         "end_date": end_date,
-        "record_count": record_count,
-        "status": "complete"
+        "record_count": record_count
     }
-    publish_kafka_messages(ProducerKafkaTopics.HISTORICAL_MARKET_DATA_COMPLETE, params)
+    publish_kafka_messages(ProducerKafkaTopics.HISTORICAL_MARKET_DATA_COMPLETE, message_payload)
 
 
 def run(message_payload):
