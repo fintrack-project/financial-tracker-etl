@@ -36,15 +36,14 @@ def insert_or_update_data(cursor, connection, asset, processed_data):
         cursor.execute("""
             INSERT INTO market_data (symbol, asset_type, price, percent_change, change, high, low, updated_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (symbol)
+            ON CONFLICT (symbol, asset_type)
             DO UPDATE SET
                 price = EXCLUDED.price,
                 percent_change = EXCLUDED.percent_change,
                 change = EXCLUDED.change,
                 high = EXCLUDED.high,
                 low = EXCLUDED.low,
-                updated_at = EXCLUDED.updated_at,
-                asset_type = EXCLUDED.asset_type
+                updated_at = EXCLUDED.updated_at
         """, (
             asset["symbol"],
             asset["asset_type"],

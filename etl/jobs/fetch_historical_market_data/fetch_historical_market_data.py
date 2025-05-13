@@ -92,10 +92,9 @@ def fetch_and_insert_data(symbols_needing_update, asset_type, max_retries=3, ret
                     cursor.execute("""
                         INSERT INTO market_data_monthly (symbol, price, date, asset_type)
                         VALUES (%s, %s, %s, %s)
-                        ON CONFLICT (symbol, date)
+                        ON CONFLICT (symbol, date, asset_type)
                         DO UPDATE SET
-                            price = EXCLUDED.price,
-                            asset_type = EXCLUDED.asset_type
+                            price = EXCLUDED.price
                     """, (
                         data["symbol"],
                         data["price"],
