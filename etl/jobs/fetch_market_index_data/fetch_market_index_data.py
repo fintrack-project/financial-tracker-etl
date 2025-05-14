@@ -29,11 +29,11 @@ def get_existing_market_index_data(symbols):
         return [
             {
                 "symbol": row[0],
-                "price": row[1],
-                "price_change": row[2],
-                "percent_change": row[3],
-                "price_high": row[4],
-                "price_low": row[5],
+                "price": float(row[1]),
+                "price_change": float(row[2]),
+                "percent_change": float(row[3]),
+                "price_high": float(row[4]),
+                "price_low": float(row[5]),
                 "updated_at": row[6]
             }
             for row in existing_data
