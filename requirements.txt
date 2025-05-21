@@ -5,5 +5,5 @@ numpy
 beautifulsoup4
 lxml
 python-dotenv
-psycopg2
+psycopg2-binary
 confluent-kafka

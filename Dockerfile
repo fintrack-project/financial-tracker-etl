@@ -1,43 +1,40 @@
-FROM python:3.9-slim
+# Stage 1: Build dependencies
+FROM python:3.9-slim as builder
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+WORKDIR /app
+
+# Install system dependencies for building Python packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN pip install --user --no-cache-dir -r requirements.txt
+
+# Stage 2: Runtime image
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# Install runtime system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     cron \
     supervisor \
     && rm -rf /var/lib/apt/lists/*
 
-# Set the working directory inside the container
-WORKDIR /app
+# Copy installed Python packages from builder
+COPY --from=builder /root/.local /root/.local
+ENV PATH=/root/.local/bin:$PATH
 
-# Copy the requirements file into the container
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy the entire project directory into the container
+# Copy project files
 COPY . /app
 
-# Copy crontab file
+# Set permissions for crontab and entrypoint
 COPY crontab /etc/cron.d/etl-cron
-RUN chmod 0644 /etc/cron.d/etl-cron
+RUN chmod 0644 /etc/cron.d/etl-cron && \
+    mkdir -p /var/log && \
+    chmod +x /app/entrypoint.sh
 
-# Create log directory
-RUN mkdir -p /var/log
-
-# Copy supervisord configuration
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-# Create an entrypoint script
-RUN echo '#!/bin/bash\n\
-# Start cron\n\
-service cron start\n\
-\n\
-# Start Kafka consumer\n\
-python3 -m etl.main consume\n\
-' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
-
-# Set the entrypoint script as the default command
 ENTRYPOINT ["/app/entrypoint.sh"]
