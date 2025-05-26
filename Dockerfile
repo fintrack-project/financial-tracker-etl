@@ -31,10 +31,11 @@ ENV PATH=/root/.local/bin:$PATH
 # Copy project files
 COPY . /app
 
-# Set permissions for crontab and entrypoint
-COPY crontab /etc/cron.d/etl-cron
-RUN chmod 0644 /etc/cron.d/etl-cron && \
-    mkdir -p /var/log && \
+# Set up supervisor configuration
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Set up the entry point
+RUN mkdir -p /var/log && \
     chmod +x /app/entrypoint.sh
 
 ENTRYPOINT ["/app/entrypoint.sh"]
