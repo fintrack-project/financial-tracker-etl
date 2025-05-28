@@ -2,10 +2,25 @@ import importlib
 import sys
 import os
 import json
+import time
 from confluent_kafka import Consumer, Producer, KafkaException, KafkaError
 from enum import Enum
-from etl.utils import log_message
+from etl.utils import log_message, load_env_variables
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# Load environment variables
+try:
+    env_vars = load_env_variables()
+except FileNotFoundError:
+    # If .env file doesn't exist, use environment variables directly
+    env_vars = os.environ
+
+# Get Kafka broker from environment variables
+KAFKA_BROKER = env_vars.get('KAFKA_BROKER')
+if not KAFKA_BROKER:
+    raise ValueError("KAFKA_BROKER environment variable is not set")
+
+log_message(f"Using Kafka broker: {KAFKA_BROKER}")
 
 class ConsumerKafkaTopics(Enum):
     """
@@ -88,68 +103,119 @@ def consume_kafka_messages():
     Consume messages from Kafka and trigger the appropriate job.
     """
     consumer_config = {
-        'bootstrap.servers': 'kafka:9093',  # Replace with your Kafka broker address
+        'bootstrap.servers': KAFKA_BROKER,
         'group.id': 'etl-job-consumer-group',
-        'auto.offset.reset': 'earliest'
+        'client.id': f'etl-consumer-{os.getpid()}',
+        'auto.offset.reset': 'latest',
+        'enable.auto.commit': True,
+        'auto.commit.interval.ms': 5000,
+        'max.poll.interval.ms': 300000,
+        'session.timeout.ms': 60000,
+        'heartbeat.interval.ms': 20000
     }
 
-    consumer = Consumer(consumer_config)
-    consumer.subscribe([topic.value for topic in ConsumerKafkaTopics])  # Add more topics if needed
+    # Log consumer configuration
+    log_message("Consumer configuration:")
+    for key, value in consumer_config.items():
+        log_message(f"  {key}: {value}")
 
-    log_message("Kafka consumer started. Listening for messages...")
+    try:
+        consumer = Consumer(consumer_config)
+        topics = [topic.value for topic in ConsumerKafkaTopics]
+        log_message(f"Attempting to subscribe to topics: {topics}")
+        consumer.subscribe(topics)
+        log_message(f"Kafka consumer started. Listening for messages on broker: {KAFKA_BROKER}")
+        log_message(f"Successfully subscribed to topics: {topics}")
+    except Exception as e:
+        log_message(f"Failed to initialize Kafka consumer: {e}")
+        raise
 
     try:
         while True:
+            log_message("Polling for messages...")
             msg = consumer.poll(1.0)  # Poll for messages with a 1-second timeout
 
             if msg is None:
+                log_message("No message received, continuing to poll...")
                 continue  # No message received, continue polling
 
             if msg.error():
                 if msg.error().code() == KafkaError._PARTITION_EOF:
                     # End of partition event
+                    log_message(f"Reached end of partition for topic {msg.topic()}, partition {msg.partition()}")
                     continue
                 else:
                     # Handle other errors
                     log_message(f"Kafka error: {msg.error()}")
                     continue
 
-            # Process the message
-            topic = msg.topic()
-            value = msg.value().decode('utf-8')
-            log_message(f"Received message on topic '{topic}': {value}")
+            try:
+                # Process the message
+                topic = msg.topic()
+                value = msg.value().decode('utf-8')
+                log_message(f"Received message on topic '{topic}': {value}")
+                log_message(f"Message metadata - Partition: {msg.partition()}, Offset: {msg.offset()}, Timestamp: {msg.timestamp()}")
 
-            # Handle empty content
-            if not value.strip():
-                log_message(f"Warning: Received empty message on topic '{topic}'. Skipping processing.")
-                continue
+                # Handle empty content
+                if not value.strip():
+                    log_message(f"Warning: Received empty message on topic '{topic}'. Skipping processing.")
+                    continue
 
-            # Trigger the appropriate jobs based on the topic
-            if topic in TOPIC_TO_JOB_MAP:
-                job_configs = TOPIC_TO_JOB_MAP[topic]["jobs"]
+                # Trigger the appropriate jobs based on the topic
+                if topic in TOPIC_TO_JOB_MAP:
+                    log_message(f"Found job configuration for topic '{topic}'")
+                    job_configs = TOPIC_TO_JOB_MAP[topic]["jobs"]
+                    log_message(f"Job configurations for topic '{topic}': {job_configs}")
+                    processing_successful = True
 
-                for job_config in job_configs:
-                    job_name = job_config["job_name"]
-                    requires_params = job_config["requires_params"]
+                    for job_config in job_configs:
+                        job_name = job_config["job_name"]
+                        requires_params = job_config["requires_params"]
+                        log_message(f"Processing job: {job_name}, requires_params: {requires_params}")
 
-                    log_message(f"Triggering job: {job_name}")
-
-                    if requires_params:
                         try:
-                            message_payload = json.loads(value)
-                            run_job(job_name, message_payload)
-                        except json.JSONDecodeError:
-                            log_message(f"Error: Failed to decode JSON message on topic '{topic}'. Skipping job '{job_name}'.")
-                            continue
+                            if requires_params:
+                                log_message(f"Attempting to parse JSON payload for job {job_name}")
+                                message_payload = json.loads(value)
+                                log_message(f"Successfully parsed JSON payload: {message_payload}")
+                                log_message(f"Starting job {job_name} with parameters")
+                                run_job(job_name, message_payload)
+                            else:
+                                log_message(f"Starting job {job_name} without parameters")
+                                run_job(job_name)
+                            log_message(f"Successfully completed job {job_name}")
+                        except json.JSONDecodeError as e:
+                            log_message(f"Error: Failed to decode JSON message on topic '{topic}'. Error: {str(e)}")
+                            processing_successful = False
+                            break
+                        except Exception as e:
+                            log_message(f"Error while running job '{job_name}': {str(e)}")
+                            log_message(f"Error details: {type(e).__name__}: {str(e)}")
+                            processing_successful = False
+                            break
+
+                    if processing_successful:
+                        log_message(f"Successfully processed message from topic '{topic}'")
                     else:
-                        run_job(job_name)
-            else:
-                log_message(f"Unknown topic: {topic}")
+                        log_message(f"Failed to process message from topic '{topic}'")
+                else:
+                    log_message(f"Unknown topic: {topic}")
+            except Exception as e:
+                log_message(f"Error processing message: {str(e)}")
+                log_message(f"Error details: {type(e).__name__}: {str(e)}")
+                continue
 
     except KeyboardInterrupt:
         log_message("Kafka consumer interrupted.")
+    except Exception as e:
+        log_message(f"Unexpected error in Kafka consumer: {str(e)}")
+        log_message(f"Error details: {type(e).__name__}: {str(e)}")
     finally:
-        consumer.close()
+        try:
+            consumer.close()
+            log_message("Kafka consumer closed.")
+        except Exception as e:
+            log_message(f"Error closing Kafka consumer: {str(e)}")
 
 def publish_kafka_messages(topic, params=None):
     """
@@ -162,11 +228,11 @@ def publish_kafka_messages(topic, params=None):
     log_message(f"Publishing Kafka message to topic: {topic.value}...")
 
     producer_config = {
-        'bootstrap.servers': 'kafka:9093',  # Replace with your Kafka broker address
+        'bootstrap.servers': KAFKA_BROKER,
     }
-    producer = Producer(producer_config)
 
     try:
+        producer = Producer(producer_config)
         # Serialize the message payload as JSON
         message = json.dumps(params) if params else "{}"
         producer.produce(topic.value, key="key", value=message)

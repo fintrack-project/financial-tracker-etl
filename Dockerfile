@@ -1,5 +1,5 @@
 # Stage 1: Build dependencies
-FROM python:3.9-slim as builder
+FROM python:3.9-slim-bullseye as builder
 
 WORKDIR /app
 
@@ -14,7 +14,7 @@ COPY requirements.txt .
 RUN pip install --user --no-cache-dir -r requirements.txt
 
 # Stage 2: Runtime image
-FROM python:3.9-slim
+FROM python:3.9-slim-bullseye
 
 WORKDIR /app
 
@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     supervisor \
     netcat-openbsd \
     postgresql-client \
+    dos2unix \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed Python packages from builder
@@ -41,7 +42,12 @@ COPY logging.conf /app/logging.conf
 
 # Create log directory and set permissions
 RUN mkdir -p /var/log && \
-    chmod +x /app/entrypoint.sh && \
+    # Convert line endings and set permissions
+    dos2unix /app/entrypoint.sh && \
+    chmod 755 /app/entrypoint.sh && \
+    chown root:root /app/entrypoint.sh && \
+    # Set ownership for app directory
+    chown -R root:root /app && \
     chown -R root:root /var/log
 
 ENTRYPOINT ["/app/entrypoint.sh"]

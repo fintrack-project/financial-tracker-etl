@@ -23,20 +23,31 @@ def get_db_connection(db_config=None):
             "password": os.getenv("DATABASE_PASSWORD"),
             "host": os.getenv("DATABASE_HOST"),
             "port": os.getenv("DATABASE_PORT"),
+            "options": f"-c search_path={os.getenv('DATABASE_SCHEMA_NAME', 'financial_tracker')}"
         }
-    return psycopg2.connect(**db_config)
+    log_message(f"Attempting to connect to database with config: {db_config}")
+    try:
+        conn = psycopg2.connect(**db_config)
+        log_message("Successfully connected to database")
+        return conn
+    except Exception as e:
+        log_message(f"Error connecting to database: {str(e)}")
+        raise
 
 def log_message(message):
-    log_dir = "logs"
-    log_file = os.path.join(log_dir, "etl.log")
+    """
+    Log a message to the ETL log file and stdout.
+    """
+    log_file = "/var/log/etl.log"
 
-    # Ensure the logs directory exists
-    os.makedirs(log_dir, exist_ok=True)
-
+    # Configure logging to both file and stdout
     logging.basicConfig(
-        filename=log_file,
         level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s"
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler(sys.stdout)
+        ]
     )
     logging.info(message)
 
@@ -66,9 +77,19 @@ def quote_market_index_data(symbols, region="US"):
     api_market_get_quotes = os.getenv("RAPIDAPI_MARKET_GET_QUOTES")
     api_key = os.getenv("RAPIDAPI_KEY")
 
-    if not api_host or not api_key or not api_market_get_quotes:
-        log_message("API_HOST or API_KEY is not set. Check your .env file.")
-        raise ValueError("API_HOST or API_KEY is not set. Check your .env file.")
+    # Check each environment variable individually
+    missing_vars = []
+    if not api_host:
+        missing_vars.append("RAPIDAPI_HOST")
+    if not api_market_get_quotes:
+        missing_vars.append("RAPIDAPI_MARKET_GET_QUOTES")
+    if not api_key:
+        missing_vars.append("RAPIDAPI_KEY")
+
+    if missing_vars:
+        error_msg = f"Missing required environment variables: {', '.join(missing_vars)}. Please check your .env file."
+        log_message(error_msg)
+        raise ValueError(error_msg)
 
     headers = {
         "X-RapidAPI-Key": api_key,
@@ -80,6 +101,8 @@ def quote_market_index_data(symbols, region="US"):
     }
 
     api_url = f"https://{api_host}/{api_market_get_quotes}"
+    log_message(f"Making API request to: {api_url}")
+    log_message(f"Request parameters: {params}")
 
     try:
         response = requests.get(api_url, headers=headers, params=params)
@@ -87,15 +110,29 @@ def quote_market_index_data(symbols, region="US"):
         data = response.json()
 
         # Validate response structure
-        if "quoteResponse" not in data or "result" not in data["quoteResponse"]:
-            raise ValueError("Invalid API response format")
+        if "quoteResponse" not in data:
+            error_msg = "Invalid API response format: missing 'quoteResponse' field"
+            log_message(error_msg)
+            raise ValueError(error_msg)
+        
+        if "result" not in data["quoteResponse"]:
+            error_msg = "Invalid API response format: missing 'result' field in 'quoteResponse'"
+            log_message(error_msg)
+            raise ValueError(error_msg)
 
-        log_message(f"Successfully fetched market data for {len(data['quoteResponse']['result'])} symbols.")
-        return data["quoteResponse"]["result"]
+        result = data["quoteResponse"]["result"]
+        log_message(f"Successfully fetched market data for {len(result)} symbols.")
+        log_message(f"API response: {result}")
+        return result
 
     except requests.exceptions.RequestException as e:
-        log_message(f"Error quoting market data: {e}")
-        raise
+        error_msg = f"Error quoting market data: {str(e)}"
+        log_message(error_msg)
+        raise ValueError(error_msg)
+    except Exception as e:
+        error_msg = f"Unexpected error while quoting market data: {str(e)}"
+        log_message(error_msg)
+        raise ValueError(error_msg)
 
 def get_realtime_stock_data(symbol):
     """

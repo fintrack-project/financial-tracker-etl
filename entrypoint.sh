@@ -9,23 +9,38 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a /var/log/entrypoint.log
 }
 
-# Check if required environment variables are set
-log "Checking environment variables..."
-required_vars=(
-    "KAFKA_BROKER"
-    "DATABASE_HOST"
-    "DATABASE_PORT"
-    "DATABASE_NAME"
-    "DATABASE_USER"
-    "DATABASE_PASSWORD"
-)
+echo "[$(date)] Checking environment variables..."
 
-for var in "${required_vars[@]}"; do
-    if [ -z "${!var}" ]; then
-        log "ERROR: Required environment variable $var is not set"
-        exit 1
-    fi
-done
+# Check if required environment variables are set
+if [ -z "$KAFKA_BROKER" ]; then
+    echo "Error: KAFKA_BROKER environment variable is not set"
+    exit 1
+fi
+
+if [ -z "$DATABASE_HOST" ]; then
+    echo "Error: DATABASE_HOST environment variable is not set"
+    exit 1
+fi
+
+if [ -z "$DATABASE_PORT" ]; then
+    echo "Error: DATABASE_PORT environment variable is not set"
+    exit 1
+fi
+
+if [ -z "$DATABASE_NAME" ]; then
+    echo "Error: DATABASE_NAME environment variable is not set"
+    exit 1
+fi
+
+if [ -z "$DATABASE_USER" ]; then
+    echo "Error: DATABASE_USER environment variable is not set"
+    exit 1
+fi
+
+if [ -z "$DATABASE_PASSWORD" ]; then
+    echo "Error: DATABASE_PASSWORD environment variable is not set"
+    exit 1
+fi
 
 # Wait for database to be ready
 log "Waiting for database to be ready..."
