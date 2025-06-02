@@ -106,12 +106,18 @@ def consume_kafka_messages():
         'bootstrap.servers': KAFKA_BROKER,
         'group.id': 'etl-job-consumer-group',
         'client.id': f'etl-consumer-{os.getpid()}',
-        'auto.offset.reset': 'latest',
+        'auto.offset.reset': 'earliest',
         'enable.auto.commit': True,
         'auto.commit.interval.ms': 5000,
         'max.poll.interval.ms': 300000,
         'session.timeout.ms': 60000,
-        'heartbeat.interval.ms': 20000
+        'heartbeat.interval.ms': 20000,
+        'fetch.min.bytes': 1,
+        'fetch.wait.max.ms': 500,
+        'max.partition.fetch.bytes': 1048576,
+        'check.crcs': True,
+        'retries': 3,
+        'retry.backoff.ms': 1000
     }
 
     # Log consumer configuration
@@ -229,6 +235,15 @@ def publish_kafka_messages(topic, params=None):
 
     producer_config = {
         'bootstrap.servers': KAFKA_BROKER,
+        'acks': 'all',
+        'retries': 3,
+        'retry.backoff.ms': 1000,
+        'request.timeout.ms': 30000,
+        'max.block.ms': 60000,
+        'enable.idempotence': True,
+        'compression.type': 'snappy',
+        'linger.ms': 5,
+        'batch.size': 16384
     }
 
     try:

@@ -1,5 +1,5 @@
 # Stage 1: Build dependencies
-FROM python:3.9-slim-bullseye as builder
+FROM python:3.13.3-slim-bullseye as builder
 
 WORKDIR /app
 
@@ -14,7 +14,7 @@ COPY requirements.txt .
 RUN pip install --user --no-cache-dir -r requirements.txt
 
 # Stage 2: Runtime image
-FROM python:3.9-slim-bullseye
+FROM python:3.13.3-slim-bullseye
 
 WORKDIR /app
 
