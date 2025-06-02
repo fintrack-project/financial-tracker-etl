@@ -1,5 +1,5 @@
 # Stage 1: Build dependencies
-FROM python:3.13.3-slim-bullseye as builder
+FROM python:3.14.0b2-slim-bookworm as builder
 
 WORKDIR /app
 
@@ -14,17 +14,17 @@ COPY requirements.txt .
 RUN pip install --user --no-cache-dir -r requirements.txt
 
 # Stage 2: Runtime image
-FROM python:3.13.3-slim-bullseye
+FROM python:3.14.0b2-slim-bookworm
 
 WORKDIR /app
 
 # Install runtime system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    cron \
-    supervisor \
-    netcat-openbsd \
-    postgresql-client \
-    dos2unix \
+    cron=3.0pl1-162 \
+    supervisor=4.2.5-1 \
+    netcat-openbsd=1.219-1 \
+    postgresql-client=15+248 \
+    dos2unix=7.4.3-1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed Python packages from builder
