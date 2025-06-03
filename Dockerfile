@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     supervisor=4.2.5-1 \
     netcat-openbsd=1.219-1 \
     postgresql-client=15+248 \
+    postgresql-common=248 \
     dos2unix=7.4.3-1 \
     && rm -rf /var/lib/apt/lists/*
 
