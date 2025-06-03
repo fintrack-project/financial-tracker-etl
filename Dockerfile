@@ -1,43 +1,54 @@
-FROM python:3.9-slim
+# Stage 1: Build dependencies
+FROM python:3.13.3-slim-bookworm as builder
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    libpq-dev \
-    cron \
-    supervisor \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set the working directory inside the container
 WORKDIR /app
 
-# Copy the requirements file into the container
+# Install system dependencies for building Python packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install dependencies
 COPY requirements.txt .
+RUN pip install --user --no-cache-dir -r requirements.txt
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Stage 2: Runtime image
+FROM python:3.13.3-slim-bookworm
 
-# Copy the entire project directory into the container
+WORKDIR /app
+
+# Install runtime system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    cron=3.0pl1-162 \
+    supervisor=4.2.5-1 \
+    netcat-openbsd=1.219-1 \
+    postgresql-client=15+248 \
+    postgresql-common=248 \
+    dos2unix=7.4.3-1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy installed Python packages from builder
+COPY --from=builder /root/.local /root/.local
+ENV PATH=/root/.local/bin:$PATH
+
+# Copy project files
 COPY . /app
 
-# Copy crontab file
-COPY crontab /etc/cron.d/etl-cron
-RUN chmod 0644 /etc/cron.d/etl-cron
-
-# Create log directory
-RUN mkdir -p /var/log
-
-# Copy supervisord configuration
+# Set up supervisor configuration
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Create an entrypoint script
-RUN echo '#!/bin/bash\n\
-# Start cron\n\
-service cron start\n\
-\n\
-# Start Kafka consumer\n\
-python3 -m etl.main consume\n\
-' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+# Set up logging configuration
+COPY logging.conf /app/logging.conf
 
-# Set the entrypoint script as the default command
+# Create log directory and set permissions
+RUN mkdir -p /var/log && \
+    # Convert line endings and set permissions
+    dos2unix /app/entrypoint.sh && \
+    chmod 755 /app/entrypoint.sh && \
+    chown root:root /app/entrypoint.sh && \
+    # Set ownership for app directory
+    chown -R root:root /app && \
+    chown -R root:root /var/log
+
 ENTRYPOINT ["/app/entrypoint.sh"]

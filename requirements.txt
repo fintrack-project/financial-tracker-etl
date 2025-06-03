@@ -1,9 +1,9 @@
 # Python dependencies
-pandas
-requests
-numpy
-beautifulsoup4
-lxml
-python-dotenv
-psycopg2
-confluent-kafka
+pandas==2.2.3
+requests==2.32.3
+numpy==2.2.6
+beautifulsoup4==4.13.4
+lxml==5.4.0
+python-dotenv==1.1.0
+psycopg2-binary==2.9.10
+confluent-kafka==2.10.0

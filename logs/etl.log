@@ -1,0 +1,28 @@
+2025-05-27 05:10:55,927 - INFO - Usage: python3 -m etl.main consume
+2025-05-27 05:10:55,932 - INFO - Kafka consumer started. Listening for messages...
+2025-05-27 05:10:56,932 - INFO - Kafka error: KafkaError{code=UNKNOWN_TOPIC_OR_PART,val=3,str="Subscribed topic not available: HISTORICAL_MARKET_DATA_REQUEST: Broker: Unknown topic or partition"}
+2025-05-27 05:10:56,933 - INFO - Kafka error: KafkaError{code=UNKNOWN_TOPIC_OR_PART,val=3,str="Subscribed topic not available: HOLDINGS_MONTHLY_REQUEST: Broker: Unknown topic or partition"}
+2025-05-27 05:10:56,934 - INFO - Kafka error: KafkaError{code=UNKNOWN_TOPIC_OR_PART,val=3,str="Subscribed topic not available: MARKET_DATA_UPDATE_REQUEST: Broker: Unknown topic or partition"}
+2025-05-27 05:10:56,935 - INFO - Kafka error: KafkaError{code=UNKNOWN_TOPIC_OR_PART,val=3,str="Subscribed topic not available: MARKET_INDEX_DATA_UPDATE_REQUEST: Broker: Unknown topic or partition"}
+2025-05-27 05:10:56,936 - INFO - Kafka error: KafkaError{code=UNKNOWN_TOPIC_OR_PART,val=3,str="Subscribed topic not available: TRANSACTIONS_CONFIRMED: Broker: Unknown topic or partition"}
+2025-05-27 05:10:57,288 - INFO - Usage: python3 -m etl.main consume
+2025-05-27 05:10:59,647 - INFO - Usage: python3 -m etl.main consume
+2025-05-27 05:11:03,084 - INFO - Usage: python3 -m etl.main consume
+2025-05-27 05:26:37,215 - INFO - Usage: python3 -m etl.main consume
+2025-05-27 05:26:37,234 - INFO - Kafka consumer started. Listening for messages...
+2025-05-27 05:26:39,221 - INFO - Kafka error: KafkaError{code=UNKNOWN_TOPIC_OR_PART,val=3,str="Subscribed topic not available: HISTORICAL_MARKET_DATA_REQUEST: Broker: Unknown topic or partition"}
+2025-05-27 05:26:39,223 - INFO - Kafka error: KafkaError{code=UNKNOWN_TOPIC_OR_PART,val=3,str="Subscribed topic not available: HOLDINGS_MONTHLY_REQUEST: Broker: Unknown topic or partition"}
+2025-05-27 05:26:39,224 - INFO - Kafka error: KafkaError{code=UNKNOWN_TOPIC_OR_PART,val=3,str="Subscribed topic not available: MARKET_DATA_UPDATE_REQUEST: Broker: Unknown topic or partition"}
+2025-05-27 05:26:39,226 - INFO - Kafka error: KafkaError{code=UNKNOWN_TOPIC_OR_PART,val=3,str="Subscribed topic not available: MARKET_INDEX_DATA_UPDATE_REQUEST: Broker: Unknown topic or partition"}
+2025-05-27 05:26:39,227 - INFO - Kafka error: KafkaError{code=UNKNOWN_TOPIC_OR_PART,val=3,str="Subscribed topic not available: TRANSACTIONS_CONFIRMED: Broker: Unknown topic or partition"}
+2025-05-27 05:26:39,716 - INFO - Usage: python3 -m etl.main consume
+2025-05-27 05:26:42,693 - INFO - Usage: python3 -m etl.main consume
+2025-05-27 05:26:46,415 - INFO - Usage: python3 -m etl.main consume
+2025-05-27 05:44:19,662 - INFO - Kafka consumer started. Listening for messages...
+2025-05-27 05:44:21,668 - INFO - Kafka error: KafkaError{code=UNKNOWN_TOPIC_OR_PART,val=3,str="Subscribed topic not available: HISTORICAL_MARKET_DATA_REQUEST: Broker: Unknown topic or partition"}
+2025-05-27 05:44:21,670 - INFO - Kafka error: KafkaError{code=UNKNOWN_TOPIC_OR_PART,val=3,str="Subscribed topic not available: HOLDINGS_MONTHLY_REQUEST: Broker: Unknown topic or partition"}
+2025-05-27 05:44:21,671 - INFO - Kafka error: KafkaError{code=UNKNOWN_TOPIC_OR_PART,val=3,str="Subscribed topic not available: MARKET_DATA_UPDATE_REQUEST: Broker: Unknown topic or partition"}
+2025-05-27 05:44:21,672 - INFO - Kafka error: KafkaError{code=UNKNOWN_TOPIC_OR_PART,val=3,str="Subscribed topic not available: MARKET_INDEX_DATA_UPDATE_REQUEST: Broker: Unknown topic or partition"}
+2025-05-27 05:44:21,673 - INFO - Kafka error: KafkaError{code=UNKNOWN_TOPIC_OR_PART,val=3,str="Subscribed topic not available: TRANSACTIONS_CONFIRMED: Broker: Unknown topic or partition"}
+2025-05-27 06:01:48,114 - INFO - Kafka consumer started. Listening for messages on broker: kafka:9093...
+2025-05-27 06:10:36,357 - INFO - Kafka consumer started. Listening for messages on broker: kafka:9093...

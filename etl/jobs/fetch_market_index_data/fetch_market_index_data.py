@@ -149,12 +149,18 @@ def run(message_payload):
     if len(existing_data) == len(symbols):
         log_message("All market index data exists. Using existing data.")
         publish_market_index_data_update_complete(existing_data)
-    else:
-        log_message("Some market index data is missing. Quoting new data...")
+        return
 
+    log_message("Some market index data is missing. Attempting to quote new data...")
+
+    try:
         # Quote market data and process it if necessary
+        log_message("Attempting to quote market data from external API...")
         raw_data = quote_market_index_data(symbols)
+        log_message(f"Successfully quoted market data: {raw_data}")
+        
         processed_data = process_market_data(raw_data)
+        log_message(f"Processed market data: {processed_data}")
 
         # Save data to the database
         save_market_data_to_db(processed_data)
@@ -162,6 +168,23 @@ def run(message_payload):
         # Publish Kafka topic
         publish_market_index_data_update_complete(processed_data)
         log_message("Market data quoted and saved successfully.")
+    except ValueError as e:
+        log_message(f"Configuration error: {str(e)}")
+        # If we have existing data, use it even if incomplete
+        if existing_data:
+            log_message("Using existing data despite configuration error.")
+            publish_market_index_data_update_complete(existing_data)
+        else:
+            log_message("No existing data available and configuration error occurred.")
+    except Exception as e:
+        log_message(f"Error during market data processing: {str(e)}")
+        log_message(f"Error details: {type(e).__name__}: {str(e)}")
+        # If we have existing data, use it even if there was an error
+        if existing_data:
+            log_message("Using existing data despite processing error.")
+            publish_market_index_data_update_complete(existing_data)
+        else:
+            log_message("No existing data available and processing error occurred.")
 
 if __name__ == "__main__":
     run()
