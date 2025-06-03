@@ -1,17 +1,12 @@
 # Stage 1: Build dependencies
-FROM python:3.14.0b2-slim-bookworm as builder
+FROM python:3.13.3-slim-bookworm as builder
 
 WORKDIR /app
 
 # Install system dependencies for building Python packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
-    g++ \
     libpq-dev \
-    build-essential \
-    python3-dev \
-    libxml2-dev \
-    libxslt1-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install dependencies
@@ -19,7 +14,7 @@ COPY requirements.txt .
 RUN pip install --user --no-cache-dir -r requirements.txt
 
 # Stage 2: Runtime image
-FROM python:3.14.0b2-slim-bookworm
+FROM python:3.13.3-slim-bookworm
 
 WORKDIR /app
 
