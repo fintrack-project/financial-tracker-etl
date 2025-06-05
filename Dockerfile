@@ -1,5 +1,5 @@
 # Stage 1: Build dependencies
-FROM python:3.13.3-slim-bookworm as builder
+FROM python:3.13.4-slim-bookworm as builder
 
 WORKDIR /app
 
@@ -7,6 +7,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
+    libzstd-dev=1.5.4+dfsg2-5 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install dependencies
@@ -14,7 +15,7 @@ COPY requirements.txt .
 RUN pip install --user --no-cache-dir -r requirements.txt
 
 # Stage 2: Runtime image
-FROM python:3.13.3-slim-bookworm
+FROM python:3.13.4-slim-bookworm
 
 WORKDIR /app
 
@@ -23,9 +24,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cron=3.0pl1-162 \
     supervisor=4.2.5-1 \
     netcat-openbsd=1.219-1 \
-    postgresql-client=15+248 \
-    postgresql-common=248 \
     dos2unix=7.4.3-1 \
+    postgresql-client=15+248 \
+    libzstd1=1.5.4+dfsg2-5 \
+    # && apt-get purge -y --auto-remove \
+    #     perl perl-base perl-modules-5.36 libperl5.36 \
+    #     libexpat1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed Python packages from builder
