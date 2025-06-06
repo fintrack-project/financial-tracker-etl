@@ -25,6 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     netcat-openbsd=1.219-1 \
     postgresql-client=15+248 \
     dos2unix=7.4.3-1 \
+    libsystemd0=252.38-1~deb12u1 \
+    libudev1=252.38-1~deb12u1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed Python packages from builder
