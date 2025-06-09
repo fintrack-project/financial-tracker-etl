@@ -1,4 +1,4 @@
-import psycopg2
+import psycopg
 import sys
 import logging
 import requests
@@ -27,7 +27,7 @@ def get_db_connection(db_config=None):
         }
     log_message(f"Attempting to connect to database with config: {db_config}")
     try:
-        conn = psycopg2.connect(**db_config)
+        conn = psycopg.connect(**db_config)
         log_message("Successfully connected to database")
         return conn
     except Exception as e:

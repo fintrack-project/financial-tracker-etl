@@ -42,12 +42,33 @@ if [ -z "$DATABASE_PASSWORD" ]; then
     exit 1
 fi
 
-# Wait for database to be ready
+# Wait for database to be ready using Python
 log "Waiting for database to be ready..."
-until PGPASSWORD=$DATABASE_PASSWORD psql -h "$DATABASE_HOST" -p "$DATABASE_PORT" -U "$DATABASE_USER" -d "$DATABASE_NAME" -c '\q'; do
-    log "Database is unavailable - sleeping"
-    sleep 1
-done
+python3 << EOF
+import os
+import time
+import psycopg
+from psycopg import OperationalError
+
+def wait_for_db():
+    while True:
+        try:
+            conn = psycopg.connect(
+                host=os.getenv('DATABASE_HOST'),
+                port=os.getenv('DATABASE_PORT'),
+                dbname=os.getenv('DATABASE_NAME'),
+                user=os.getenv('DATABASE_USER'),
+                password=os.getenv('DATABASE_PASSWORD')
+            )
+            conn.close()
+            print("Database is ready")
+            break
+        except OperationalError:
+            print("Database is unavailable - sleeping")
+            time.sleep(1)
+
+wait_for_db()
+EOF
 log "Database is ready"
 
 # Wait for Kafka to be ready

@@ -1,5 +1,5 @@
 # Stage 1: Build dependencies
-FROM python:3.13.3-slim-bookworm as builder
+FROM python:3.13.4-slim-bookworm as builder
 
 WORKDIR /app
 
@@ -14,18 +14,19 @@ COPY requirements.txt .
 RUN pip install --user --no-cache-dir -r requirements.txt
 
 # Stage 2: Runtime image
-FROM python:3.13.3-slim-bookworm
+FROM python:3.13.4-slim-bookworm
 
 WORKDIR /app
 
-# Install runtime system dependencies
+# Install runtime system dependencies with specific versions to fix CVEs
 RUN apt-get update && apt-get install -y --no-install-recommends \
     cron=3.0pl1-162 \
     supervisor=4.2.5-1 \
     netcat-openbsd=1.219-1 \
     postgresql-client=15+248 \
-    postgresql-common=248 \
     dos2unix=7.4.3-1 \
+    libsystemd0=252.38-1~deb12u1 \
+    libudev1=252.38-1~deb12u1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed Python packages from builder
