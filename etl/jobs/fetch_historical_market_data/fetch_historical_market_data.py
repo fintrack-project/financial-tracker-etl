@@ -129,7 +129,7 @@ def fetch_historical_market_data(symbols, asset_type, start_date, end_date):
     return fetch_and_insert_data(symbols_needing_update, asset_type)
 
 
-def publish_market_data_monthly_complete(symbols, asset_type, start_date, end_date, record_count):
+def publish_market_data_monthly_complete(symbols, asset_type, start_date, end_date, record_count, total_batches=None, total_assets=None, processing_time_ms=None):
     """
     Publish a Kafka topic indicating that the historical market data update is complete.
     """
@@ -140,12 +140,22 @@ def publish_market_data_monthly_complete(symbols, asset_type, start_date, end_da
         "end_date": end_date,
         "record_count": record_count
     }
+    
+    # Add batch metadata if provided
+    if total_batches is not None:
+        message_payload["totalBatches"] = total_batches
+    if total_assets is not None:
+        message_payload["totalAssets"] = total_assets
+    if processing_time_ms is not None:
+        message_payload["processingTimeMs"] = processing_time_ms
+    message_payload["status"] = "complete"
+    
     publish_kafka_messages(ProducerKafkaTopics.HISTORICAL_MARKET_DATA_COMPLETE, message_payload)
 
 
 def run(message_payload):
     """
-    Main function to fetch and update historical market data for mixed asset types.
+    Main function to fetch and update historical market data for mixed asset types with batching.
     """
     log_message("Starting fetch_historical_market_data job...")
     log_message(f"Received message payload: {message_payload}")
@@ -177,14 +187,40 @@ def run(message_payload):
 
     try:
         total_record_count = 0
+        total_assets = len(assets)
+        batch_size = 50  # Smaller batch size for historical data due to API rate limits
+        start_time = time.time()
+        
         for asset_type, asset_symbols in assets_by_asset_type.items():
             log_message(f"Processing asset type: {asset_type} with symbols: {asset_symbols}")
-            data = fetch_historical_market_data(asset_symbols, asset_type, start_date, end_date)
-            record_count = len(data)
-            total_record_count += record_count
-            publish_market_data_monthly_complete(asset_symbols, asset_type, start_date, end_date, record_count)
+            
+            # Process symbols in batches
+            for i in range(0, len(asset_symbols), batch_size):
+                batch_symbols = asset_symbols[i:i+batch_size]
+                log_message(f"Processing batch {i//batch_size+1} for asset type {asset_type} with {len(batch_symbols)} symbols: {batch_symbols}")
+                
+                data = fetch_historical_market_data(batch_symbols, asset_type, start_date, end_date)
+                record_count = len(data)
+                total_record_count += record_count
+                
+                # Publish completion for this batch
+                publish_market_data_monthly_complete(
+                    batch_symbols, 
+                    asset_type, 
+                    start_date, 
+                    end_date, 
+                    record_count
+                )
+                
+                log_message(f"Completed batch {i//batch_size+1} for asset type {asset_type} with {record_count} records.")
 
+        processing_time_ms = int((time.time() - start_time) * 1000)
+        total_batches = sum((len(symbols) + batch_size - 1) // batch_size for symbols in assets_by_asset_type.values())
+        
         log_message(f"Total records processed: {total_record_count}")
+        log_message(f"Total assets processed: {total_assets}")
+        log_message(f"Total batches processed: {total_batches}")
+        log_message(f"Total processing time: {processing_time_ms}ms")
 
     except Exception as e:
         log_message(f"Error during fetch_historical_market_data job: {e}")

@@ -1,4 +1,5 @@
 from datetime import datetime
+import time
 from dateutil.relativedelta import relativedelta
 from etl.utils import get_db_connection, log_message
 from etl.process_transactions_utils import (
@@ -151,21 +152,34 @@ def calculate_monthly_holdings(account_id, assets, start_date):
         cursor.close()
         connection.close()
 
-def publish_transactions_processed():
+def publish_transactions_processed(account_id=None, assets=None, total_batches=None, total_assets=None, processing_time_ms=None):
     """
     Publish a Kafka topic indicating that transactions have been processed.
     """
-    # Use the centralized publish_kafka_messages method
-    params = {"status": "transactions_processed"}
-    publish_kafka_messages(ProducerKafkaTopics.PROCESS_TRANSACTIONS_TO_HOLDINGS_MONTHLY_COMPLETE, params)
+    message_payload = {"status": "transactions_processed"}
+    
+    # Add batch metadata if provided
+    if account_id is not None:
+        message_payload["account_id"] = account_id
+    if assets is not None:
+        message_payload["assets"] = assets
+    if total_batches is not None:
+        message_payload["totalBatches"] = total_batches
+    if total_assets is not None:
+        message_payload["totalAssets"] = total_assets
+    if processing_time_ms is not None:
+        message_payload["processingTimeMs"] = processing_time_ms
+    
+    publish_kafka_messages(ProducerKafkaTopics.PROCESS_TRANSACTIONS_TO_HOLDINGS_MONTHLY_COMPLETE, message_payload)
 
 def run(message_payload=None):
     """
-    Main function to calculate and update monthly holdings.
+    Main function to calculate and update monthly holdings with batching.
     If message_payload is provided, process for the specific account_id and assets.
     If no message_payload is provided, process for all accounts and their assets.
     """
     log_message("Starting process_transactions_to_holdings_monthly job...")
+    start_time = time.time()
 
     if message_payload:
         log_message(f"Received message payload: {message_payload}")
@@ -193,9 +207,33 @@ def run(message_payload=None):
         # Use the 1st day of the month of earliest date of all transactions as the start_date
         start_date = get_earliest_transaction_date(account_id)
 
-        for asset_name in get_all_assets(account_id):
-            log_message(f"Processing account_id: {account_id}, asset_name: {asset_name}, start_date: {start_date}")
-            calculate_monthly_holdings(account_id, [asset_name], start_date)
+        # Batching logic
+        all_assets = get_all_assets(account_id)
+        batch_size = 50  # Smaller batch size for monthly holdings processing
+        all_results = []
+        
+        for i in range(0, len(all_assets), batch_size):
+            batch_assets = all_assets[i:i+batch_size]
+            log_message(f"Processing batch {i//batch_size+1} with {len(batch_assets)} assets: {batch_assets}")
+            
+            for asset_name in batch_assets:
+                log_message(f"Processing account_id: {account_id}, asset_name: {asset_name}, start_date: {start_date}")
+                calculate_monthly_holdings(account_id, [asset_name], start_date)
+            
+            all_results.extend(batch_assets)
+            log_message(f"Completed batch {i//batch_size+1} with {len(batch_assets)} assets.")
+
+        processing_time_ms = int((time.time() - start_time) * 1000)
+        total_batches = (len(all_assets) + batch_size - 1) // batch_size
+        
+        # Publish completion with batch metadata
+        publish_transactions_processed(
+            account_id=account_id,
+            assets=all_results,
+            total_batches=total_batches,
+            total_assets=len(all_assets),
+            processing_time_ms=processing_time_ms
+        )
 
     else:
         log_message("No message payload provided. Processing all accounts and assets.")
@@ -205,12 +243,31 @@ def run(message_payload=None):
 
         # Retrieve all accounts and their assets
         accounts_and_assets = get_all_accounts_and_assets()
+        
+        # Batching logic for all accounts
+        batch_size = 50
+        all_results = []
+        
+        for i in range(0, len(accounts_and_assets), batch_size):
+            batch_accounts_assets = accounts_and_assets[i:i+batch_size]
+            log_message(f"Processing batch {i//batch_size+1} with {len(batch_accounts_assets)} account-asset pairs")
+            
+            for account_id, asset_name in batch_accounts_assets:
+                log_message(f"Processing account_id: {account_id}, asset_name: {asset_name}, start_date: {start_date}")
+                calculate_monthly_holdings(account_id, [asset_name], start_date)
+            
+            all_results.extend(batch_accounts_assets)
+            log_message(f"Completed batch {i//batch_size+1} with {len(batch_accounts_assets)} account-asset pairs.")
 
-        for account_id, asset_name in accounts_and_assets:
-            log_message(f"Processing account_id: {account_id}, asset_name: {asset_name}, start_date: {start_date}")
-            calculate_monthly_holdings(account_id, [asset_name], start_date)
+        processing_time_ms = int((time.time() - start_time) * 1000)
+        total_batches = (len(accounts_and_assets) + batch_size - 1) // batch_size
+        
+        # Publish completion with batch metadata
+        publish_transactions_processed(
+            assets=all_results,
+            total_batches=total_batches,
+            total_assets=len(accounts_and_assets),
+            processing_time_ms=processing_time_ms
+        )
 
-    # Publish a Kafka message indicating the job is complete
-    publish_transactions_processed()
-
-    log_message("process_transactions_to_holdings_monthly job completed successfully.")
+    log_message(f"process_transactions_to_holdings_monthly job completed successfully. Processed {len(all_results) if 'all_results' in locals() else 0} assets in {total_batches if 'total_batches' in locals() else 0} batches in {processing_time_ms if 'processing_time_ms' in locals() else 0}ms.")
