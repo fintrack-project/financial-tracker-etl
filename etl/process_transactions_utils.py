@@ -231,19 +231,20 @@ def process_affected_assets_optimized(account_id, transactions_added, transactio
     if affected_assets:
         log_message(f"Processing {len(affected_assets)} affected assets: {affected_assets}")
         
-        # Process holdings updates
-        holdings_processor_func(account_id, affected_assets)
-        
+        # Process holdings updates using optimized function
+        if holdings_processor_func:
+            holdings_processor_func(account_id, affected_assets)
+
         # Process monthly holdings updates if function provided
         if monthly_processor_func and start_date:
             log_message(f"Processing monthly holdings for {len(affected_assets)} affected assets")
             monthly_processor_func(account_id, affected_assets, start_date)
     else:
         log_message("No affected assets to process")
-    
+
     processing_time_ms = int((time.time() - start_time) * 1000)
     log_message(f"Processed {len(affected_assets)} affected assets in {processing_time_ms}ms")
-    
+
     return affected_assets, processing_time_ms
 
 def process_batch_transactions_optimized(message_payload, holdings_processor_func, 
