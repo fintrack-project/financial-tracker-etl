@@ -9,6 +9,8 @@ from etl.process_transactions_utils import (
     remove_orphaned_data,
     get_all_assets,
     get_earliest_transaction_date,
+    process_affected_assets_optimized,
+    process_batch_transactions_optimized,
 )
 from main import publish_kafka_messages, ProducerKafkaTopics
 
@@ -93,9 +95,78 @@ def remove_invalid_monthly_holdings(account_id, assets):
         cursor.close()
         connection.close()
 
+def calculate_monthly_holdings_for_specific_assets(account_id, assets, start_date):
+    """
+    Calculate and update the monthly holdings for specific assets only.
+    This is much more efficient than calculating for all assets.
+    """
+    if not assets:
+        log_message(f"No specific assets to calculate monthly holdings for account_id: {account_id}")
+        return
+
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    try:
+        log_message(f"Calculating monthly holdings for account_id: {account_id} for specific assets: {assets}")
+
+        for asset_name in assets:
+            # Retrieve unit and symbol from the asset table
+            cursor.execute("""
+                SELECT unit, symbol, asset_type
+                FROM asset
+                WHERE account_id = %s AND asset_name = %s
+            """, (account_id, asset_name))
+            result = cursor.fetchone()
+            if not result:
+                log_message(f"Error: Asset '{asset_name}' not found in the asset table for account_id: {account_id}.")
+                continue
+
+            unit, symbol, asset_type = result
+
+            # Align start_date to the 1st day of the month
+            aligned_start_date = align_to_first_day_of_month(start_date)
+            if start_date != aligned_start_date:
+                current_date = aligned_start_date + relativedelta(months=1)
+            else:
+                current_date = aligned_start_date
+
+            while current_date <= align_to_first_day_of_month(datetime.utcnow().date()):
+                # Aggregate transactions up to the current date
+                cursor.execute("""
+                    SELECT SUM(credit) - SUM(debit) AS total_balance
+                    FROM transactions
+                    WHERE account_id = %s AND asset_name = %s AND date < %s AND deleted_at IS NULL
+                """, (account_id, asset_name, current_date))
+                total_balance = cursor.fetchone()[0]
+
+                # Skip updating if no transactions exist for the asset
+                if total_balance is None or total_balance == 0:
+                    log_message(f"No transactions found for account_id: {account_id}, asset_name: {asset_name}, date: {current_date}. Skipping update.")
+                    current_date += relativedelta(months=1)
+                    continue
+
+                # Use the new method to insert or update the monthly holdings table
+                insert_or_update_holdings_monthly(cursor, account_id, asset_name, current_date, total_balance, unit, symbol, asset_type)
+
+                # Move to the next month
+                current_date += relativedelta(months=1)
+
+        connection.commit()
+        log_message(f"Monthly holdings calculated successfully for account_id: {account_id} for assets: {assets}")
+
+    except Exception as e:
+        log_message(f"Error while calculating monthly holdings for account_id {account_id}: {e}")
+        connection.rollback()
+        raise
+    finally:
+        cursor.close()
+        connection.close()
+
 def calculate_monthly_holdings(account_id, assets, start_date):
     """
     Calculate and update the monthly holdings for each account's asset_name.
+    This is the original function kept for backward compatibility.
     """
     connection = get_db_connection()
     cursor = connection.cursor()
@@ -174,66 +245,33 @@ def publish_transactions_processed(account_id=None, assets=None, total_batches=N
 
 def run(message_payload=None):
     """
-    Main function to calculate and update monthly holdings with batching.
-    If message_payload is provided, process for the specific account_id and assets.
-    If no message_payload is provided, process for all accounts and their assets.
+    Main function to calculate and update monthly holdings with optimized processing.
+    Uses the common utility function for optimized processing.
     """
     log_message("Starting process_transactions_to_holdings_monthly job...")
-    start_time = time.time()
 
     if message_payload:
         log_message(f"Received message payload: {message_payload}")
 
+        # Get the earliest transaction date for the account
         account_id = message_payload.get("account_id")
-        transactions_added = message_payload.get("transactions_added", [])
-        transactions_deleted = message_payload.get("transactions_deleted", [])
-
-        # Retrieve assets for added and deleted transactions
-        added_assets = get_assets_by_transaction_ids(transactions_added)
-        deleted_assets = get_assets_by_transaction_ids(transactions_deleted, True)
-
-        log_message(f"Transactions added: {transactions_added}, Transactions deleted: {transactions_deleted}")
-        log_message(f"Processing account_id: {account_id} with added assets: {added_assets}, deleted assets: {deleted_assets}")
-
-        # Check if no transactions exist and remove all holdings if necessary
-        remove_all_holdings_for_account_if_no_transactions_exist(account_id)
-
-        # Remove orphaned monthly holdings for deleted assets
-        remove_orphaned_data(account_id, deleted_assets, "holdings_monthly")
-
-        # Remove invalid monthly holdings for both deleted and added assets
-        remove_invalid_monthly_holdings(account_id, list(set(added_assets + deleted_assets)))
-
-        # Use the 1st day of the month of earliest date of all transactions as the start_date
         start_date = get_earliest_transaction_date(account_id)
 
-        # Batching logic
-        all_assets = get_all_assets(account_id)
-        batch_size = 50  # Smaller batch size for monthly holdings processing
-        all_results = []
-        
-        for i in range(0, len(all_assets), batch_size):
-            batch_assets = all_assets[i:i+batch_size]
-            log_message(f"Processing batch {i//batch_size+1} with {len(batch_assets)} assets: {batch_assets}")
-            
-            for asset_name in batch_assets:
-                log_message(f"Processing account_id: {account_id}, asset_name: {asset_name}, start_date: {start_date}")
-                calculate_monthly_holdings(account_id, [asset_name], start_date)
-            
-            all_results.extend(batch_assets)
-            log_message(f"Completed batch {i//batch_size+1} with {len(batch_assets)} assets.")
-
-        processing_time_ms = int((time.time() - start_time) * 1000)
-        total_batches = (len(all_assets) + batch_size - 1) // batch_size
-        
-        # Publish completion with batch metadata
-        publish_transactions_processed(
-            account_id=account_id,
-            assets=all_results,
-            total_batches=total_batches,
-            total_assets=len(all_assets),
-            processing_time_ms=processing_time_ms
+        # Use the common utility function for optimized processing
+        result = process_batch_transactions_optimized(
+            message_payload=message_payload,
+            holdings_processor_func=None,  # No regular holdings processing for monthly job
+            monthly_processor_func=calculate_monthly_holdings_for_specific_assets,
+            start_date=start_date
         )
+        
+        # Publish completion message
+        publish_kafka_messages(
+            ProducerKafkaTopics.PROCESS_TRANSACTIONS_TO_HOLDINGS_MONTHLY_COMPLETE,
+            result
+        )
+        
+        log_message(f"process_transactions_to_holdings_monthly job completed successfully in {result['processingTimeMs']}ms.")
 
     else:
         log_message("No message payload provided. Processing all accounts and assets.")
@@ -244,17 +282,25 @@ def run(message_payload=None):
         # Retrieve all accounts and their assets
         accounts_and_assets = get_all_accounts_and_assets()
         
-        # Batching logic for all accounts
-        batch_size = 50
+        # OPTIMIZED: Process in larger batches for better performance
+        batch_size = 100  # Increased from 50 for better throughput
         all_results = []
         
         for i in range(0, len(accounts_and_assets), batch_size):
             batch_accounts_assets = accounts_and_assets[i:i+batch_size]
             log_message(f"Processing batch {i//batch_size+1} with {len(batch_accounts_assets)} account-asset pairs")
             
+            # Group by account_id for more efficient processing
+            account_assets_map = {}
             for account_id, asset_name in batch_accounts_assets:
-                log_message(f"Processing account_id: {account_id}, asset_name: {asset_name}, start_date: {start_date}")
-                calculate_monthly_holdings(account_id, [asset_name], start_date)
+                if account_id not in account_assets_map:
+                    account_assets_map[account_id] = []
+                account_assets_map[account_id].append(asset_name)
+            
+            # Process each account's assets together
+            for account_id, asset_names in account_assets_map.items():
+                log_message(f"Processing account_id: {account_id} with {len(asset_names)} assets: {asset_names}")
+                calculate_monthly_holdings_for_specific_assets(account_id, asset_names, start_date)
             
             all_results.extend(batch_accounts_assets)
             log_message(f"Completed batch {i//batch_size+1} with {len(batch_accounts_assets)} account-asset pairs.")

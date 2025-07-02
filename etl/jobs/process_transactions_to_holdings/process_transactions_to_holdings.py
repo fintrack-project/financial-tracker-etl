@@ -7,6 +7,8 @@ from etl.process_transactions_utils import (
     get_assets_by_transaction_ids,
     remove_all_holdings_for_account_if_no_transactions_exist,
     remove_orphaned_data,
+    process_affected_assets_optimized,
+    process_batch_transactions_optimized,
 )
 from main import publish_kafka_messages, ProducerKafkaTopics
 
@@ -28,11 +30,61 @@ def insert_or_update_holding(cursor, account_id, asset_name, symbol, unit, total
             updated_at = EXCLUDED.updated_at
     """, (account_id, asset_name, symbol, total_balance, unit, asset_type))
 
-def update_holdings(account_id):
+def update_holdings_for_specific_assets(account_id, asset_names):
+    """
+    Update the holdings table for specific assets only.
+    This is much more efficient than updating all assets.
+    """
+    if not asset_names:
+        log_message(f"No specific assets to update for account_id: {account_id}")
+        return
+
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    try:
+        log_message(f"Updating holdings for account_id: {account_id} for specific assets: {asset_names}")
+
+        # Calculate the total balance for each specific asset_name
+        for asset_name in asset_names:
+            cursor.execute("""
+                SELECT SUM(credit) - SUM(debit) AS total_balance, symbol, unit, asset_type
+                FROM transactions
+                WHERE account_id = %s AND asset_name = %s AND deleted_at IS NULL
+                GROUP BY symbol, unit, asset_type
+            """, (account_id, asset_name))
+            result = cursor.fetchone()
+
+            if result:
+                total_balance, symbol, unit, asset_type = result
+                log_message(f"Calculating total balance for asset_name: {asset_name}, total_balance: {total_balance}, symbol: {symbol}, unit: {unit}, asset_type: {asset_type}")
+
+                # Insert or update the holdings table
+                insert_or_update_holding(cursor, account_id, asset_name, symbol, unit, total_balance, asset_type)
+            else:
+                log_message(f"No transactions found for asset_name: {asset_name}, removing from holdings")
+                # Remove the asset from holdings if no transactions exist
+                cursor.execute("""
+                    DELETE FROM holdings
+                    WHERE account_id = %s AND asset_name = %s
+                """, (account_id, asset_name))
+
+        # Commit the changes to the database
+        connection.commit()
+        log_message(f"Holdings table updated successfully for account_id: {account_id} for assets: {asset_names}")
+
+    except Exception as e:
+        log_message(f"Error while updating holdings for account_id {account_id}: {e}")
+        connection.rollback()
+        raise
+    finally:
+        cursor.close()
+        connection.close()
+
+def update_all_holdings(account_id):
     """
     Update the holdings table with the total balance for each account's asset_name.
-    Retrieve all asset_name values for the given account_id from non-deleted transactions
-    and calculate the total balance for each asset_name.
+    This is the original function kept for backward compatibility.
     """
     connection = get_db_connection()
     cursor = connection.cursor()
@@ -93,50 +145,27 @@ def publish_transactions_processed():
 
 def run(message_payload):
     """
-    Main function to calculate and update holdings based on the Kafka message payload, with batching.
+    Main function to calculate and update holdings based on the Kafka message payload.
+    Uses the common utility function for optimized processing.
     """
     log_message("Starting process_transactions_to_holdings job...")
     log_message(f"Received message payload: {message_payload}")
 
-    # Extract account_id and transaction IDs from the payload
-    account_id = message_payload.get("account_id")
-    transactions_added = message_payload.get("transactions_added", [])
-    transactions_deleted = message_payload.get("transactions_deleted", [])
-
-    log_message(f"Processing account_id: {account_id} with added transactions: {transactions_added} and deleted transactions: {transactions_deleted}")
-
-    # Check if no transactions exist and remove all holdings if necessary
-    remove_all_holdings_for_account_if_no_transactions_exist(account_id)
-
-    # Retrieve assets for added and deleted transactions
-    added_assets = get_assets_by_transaction_ids(transactions_added)
-    deleted_assets = get_assets_by_transaction_ids(transactions_deleted, True)
-
-    log_message(f"Transactions added: {transactions_added}, Transactions deleted: {transactions_deleted}")
-    log_message(f"Processing account_id: {account_id} with added assets: {added_assets}, deleted assets: {deleted_assets}")
-
-    # Step 4: Remove orphaned records from holdings
-    remove_orphaned_data(account_id, deleted_assets, "holdings")
-
-    # Batching logic for added_assets
-    batch_size = 100
-    all_results = []
-    start_time = datetime.now()
-    for i in range(0, len(added_assets), batch_size):
-        batch = added_assets[i:i+batch_size]
-        # Update holdings for this batch (simulate per-asset update)
-        for asset in batch:
-            update_holdings(account_id)  # This could be optimized to only update for the batch
-        all_results.extend(batch)
-        log_message(f"Processed batch {i//batch_size+1} with {len(batch)} assets.")
-
-    processing_time_ms = int((datetime.now() - start_time).total_seconds() * 1000)
-    total_batches = (len(added_assets) + batch_size - 1) // batch_size
+    # Use the common utility function for optimized processing
+    result = process_batch_transactions_optimized(
+        message_payload=message_payload,
+        holdings_processor_func=update_holdings_for_specific_assets,
+        monthly_processor_func=None,  # No monthly processing for regular holdings
+        start_date=None
+    )
+    
+    # Publish completion message
     publish_kafka_messages(
         ProducerKafkaTopics.PROCESS_TRANSACTIONS_TO_HOLDINGS_COMPLETE,
-        {"account_id": account_id, "assets": all_results, "totalBatches": total_batches, "totalTransactions": len(added_assets), "processingTimeMs": processing_time_ms, "status": "complete"}
+        result
     )
-    log_message("process_transactions_to_holdings job completed successfully.")
+    
+    log_message(f"process_transactions_to_holdings job completed successfully in {result['processingTimeMs']}ms.")
 
 
 if __name__ == "__main__":
