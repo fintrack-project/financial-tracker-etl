@@ -93,7 +93,7 @@ def publish_transactions_processed():
 
 def run(message_payload):
     """
-    Main function to calculate and update holdings based on the Kafka message payload.
+    Main function to calculate and update holdings based on the Kafka message payload, with batching.
     """
     log_message("Starting process_transactions_to_holdings job...")
     log_message(f"Received message payload: {message_payload}")
@@ -118,11 +118,24 @@ def run(message_payload):
     # Step 4: Remove orphaned records from holdings
     remove_orphaned_data(account_id, deleted_assets, "holdings")
 
-    # Update holdings of account
-    update_holdings(account_id)
+    # Batching logic for added_assets
+    batch_size = 100
+    all_results = []
+    start_time = datetime.now()
+    for i in range(0, len(added_assets), batch_size):
+        batch = added_assets[i:i+batch_size]
+        # Update holdings for this batch (simulate per-asset update)
+        for asset in batch:
+            update_holdings(account_id)  # This could be optimized to only update for the batch
+        all_results.extend(batch)
+        log_message(f"Processed batch {i//batch_size+1} with {len(batch)} assets.")
 
-    # Publish a Kafka message indicating the job is complete
-    publish_transactions_processed()
+    processing_time_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+    total_batches = (len(added_assets) + batch_size - 1) // batch_size
+    publish_kafka_messages(
+        ProducerKafkaTopics.PROCESS_TRANSACTIONS_TO_HOLDINGS_COMPLETE,
+        {"account_id": account_id, "assets": all_results, "totalBatches": total_batches, "totalTransactions": len(added_assets), "processingTimeMs": processing_time_ms, "status": "complete"}
+    )
     log_message("process_transactions_to_holdings job completed successfully.")
 
 

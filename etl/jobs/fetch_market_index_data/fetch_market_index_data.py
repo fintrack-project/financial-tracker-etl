@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import time
 from etl.utils import get_db_connection, log_message, load_env_variables, quote_market_index_data
 from etl.fetch_utils import get_existing_data
 from main import publish_kafka_messages, ProducerKafkaTopics
@@ -105,26 +106,38 @@ def save_market_data_to_db(data):
         cursor.close()
         connection.close()
 
-def publish_market_index_data_update_complete(data):
+def publish_market_index_data_update_complete(data, total_batches=None, total_symbols=None, processing_time_ms=None):
     """
     Publish a Kafka topic indicating that the market index data update is complete.
     """
-    message_payload = [
-        {
-            "symbol": record["symbol"],
-            "price": record["price"],
-            "price_change": record["price_change"],
-            "percent_change": record["percent_change"],
-            "price_high": record["price_high"],
-            "price_low": record["price_low"]
-        }
-        for record in data
-    ]
+    message_payload = {
+        "symbols": [
+            {
+                "symbol": record["symbol"],
+                "price": record["price"],
+                "price_change": record["price_change"],
+                "percent_change": record["percent_change"],
+                "price_high": record["price_high"],
+                "price_low": record["price_low"]
+            }
+            for record in data
+        ]
+    }
+    
+    # Add batch metadata if provided
+    if total_batches is not None:
+        message_payload["totalBatches"] = total_batches
+    if total_symbols is not None:
+        message_payload["totalSymbols"] = total_symbols
+    if processing_time_ms is not None:
+        message_payload["processingTimeMs"] = processing_time_ms
+    message_payload["status"] = "complete"
+    
     publish_kafka_messages(ProducerKafkaTopics.MARKET_INDEX_DATA_UPDATE_COMPLETE, message_payload)
 
 def run(message_payload):
     """
-    Main function to fetch, process, and save market data.
+    Main function to fetch, process, and save market data with batching.
     """
     log_message("Running fetch_market_index_data job...")
     log_message(f"Received message payload: {message_payload}")
@@ -148,32 +161,53 @@ def run(message_payload):
     existing_data = get_existing_market_index_data(symbols)
     if len(existing_data) == len(symbols):
         log_message("All market index data exists. Using existing data.")
-        publish_market_index_data_update_complete(existing_data)
+        publish_market_index_data_update_complete(existing_data, total_symbols=len(symbols))
         return
 
     log_message("Some market index data is missing. Attempting to quote new data...")
 
     try:
-        # Quote market data and process it if necessary
-        log_message("Attempting to quote market data from external API...")
-        raw_data = quote_market_index_data(symbols)
-        log_message(f"Successfully quoted market data: {raw_data}")
+        # Batching logic
+        batch_size = 100
+        all_results = []
+        start_time = time.time()
         
-        processed_data = process_market_data(raw_data)
-        log_message(f"Processed market data: {processed_data}")
+        for i in range(0, len(symbols), batch_size):
+            batch_symbols = symbols[i:i+batch_size]
+            log_message(f"Processing batch {i//batch_size+1} with {len(batch_symbols)} symbols: {batch_symbols}")
+            
+            # Quote market data for this batch
+            log_message(f"Attempting to quote market data for batch {i//batch_size+1}...")
+            raw_data = quote_market_index_data(batch_symbols)
+            log_message(f"Successfully quoted market data for batch {i//batch_size+1}: {raw_data}")
+            
+            processed_data = process_market_data(raw_data)
+            log_message(f"Processed market data for batch {i//batch_size+1}: {processed_data}")
 
-        # Save data to the database
-        save_market_data_to_db(processed_data)
+            # Save data to the database
+            save_market_data_to_db(processed_data)
+            all_results.extend(processed_data)
+            
+            log_message(f"Completed batch {i//batch_size+1} with {len(processed_data)} records.")
 
-        # Publish Kafka topic
-        publish_market_index_data_update_complete(processed_data)
-        log_message("Market data quoted and saved successfully.")
+        processing_time_ms = int((time.time() - start_time) * 1000)
+        total_batches = (len(symbols) + batch_size - 1) // batch_size
+
+        # Publish Kafka topic with batch metadata
+        publish_market_index_data_update_complete(
+            all_results, 
+            total_batches=total_batches, 
+            total_symbols=len(symbols), 
+            processing_time_ms=processing_time_ms
+        )
+        log_message(f"Market data quoted and saved successfully. Processed {len(symbols)} symbols in {total_batches} batches in {processing_time_ms}ms.")
+        
     except ValueError as e:
         log_message(f"Configuration error: {str(e)}")
         # If we have existing data, use it even if incomplete
         if existing_data:
             log_message("Using existing data despite configuration error.")
-            publish_market_index_data_update_complete(existing_data)
+            publish_market_index_data_update_complete(existing_data, total_symbols=len(symbols))
         else:
             log_message("No existing data available and configuration error occurred.")
     except Exception as e:
@@ -182,7 +216,7 @@ def run(message_payload):
         # If we have existing data, use it even if there was an error
         if existing_data:
             log_message("Using existing data despite processing error.")
-            publish_market_index_data_update_complete(existing_data)
+            publish_market_index_data_update_complete(existing_data, total_symbols=len(symbols))
         else:
             log_message("No existing data available and processing error occurred.")
 
