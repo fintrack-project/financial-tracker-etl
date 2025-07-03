@@ -200,8 +200,8 @@ def run(message_payload):
                 log_message(f"Processing batch {i//batch_size+1} for asset type {asset_type} with {len(batch_symbols)} symbols: {batch_symbols}")
                 
                 data = fetch_historical_market_data(batch_symbols, asset_type, start_date, end_date)
-                record_count = len(data)
-                total_record_count += record_count
+            record_count = len(data)
+            total_record_count += record_count
                 
                 # Publish completion for this batch
                 publish_market_data_monthly_complete(
@@ -216,7 +216,7 @@ def run(message_payload):
 
         processing_time_ms = int((time.time() - start_time) * 1000)
         total_batches = sum((len(symbols) + batch_size - 1) // batch_size for symbols in assets_by_asset_type.values())
-        
+
         log_message(f"Total records processed: {total_record_count}")
         log_message(f"Total assets processed: {total_assets}")
         log_message(f"Total batches processed: {total_batches}")

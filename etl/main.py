@@ -113,11 +113,17 @@ def consume_kafka_messages():
         'session.timeout.ms': 60000,
         'heartbeat.interval.ms': 20000,
         'fetch.min.bytes': 1,
-        'fetch.wait.max.ms': 500,
+        'fetch.wait.max.ms': 100,  # Reduced from 500ms for faster response
         'max.partition.fetch.bytes': 1048576,
         'check.crcs': True,
         'retries': 3,
-        'retry.backoff.ms': 1000
+        'retry.backoff.ms': 1000,
+        # Optimized for better performance
+        'fetch.max.wait.ms': 100,  # Maximum time to wait for data
+        'fetch.min.bytes': 1,  # Minimum bytes to fetch
+        'max.partition.fetch.bytes': 1048576,  # 1MB per partition
+        'receive.buffer.bytes': 32768,  # 32KB receive buffer
+        'send.buffer.bytes': 131072,  # 128KB send buffer
     }
 
     # Log consumer configuration
@@ -139,10 +145,10 @@ def consume_kafka_messages():
     try:
         while True:
             log_message("Polling for messages...")
-            msg = consumer.poll(1.0)  # Poll for messages with a 1-second timeout
+            msg = consumer.poll(0.1)  # Poll for messages with a 100ms timeout for faster response
 
             if msg is None:
-                log_message("No message received, continuing to poll...")
+                # Don't log every poll to reduce noise
                 continue  # No message received, continue polling
 
             if msg.error():
