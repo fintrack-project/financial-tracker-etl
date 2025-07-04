@@ -185,3 +185,139 @@ def remove_orphaned_data(account_id, assets, table_name, asset_column="asset_nam
     finally:
         cursor.close()
         connection.close()
+
+def process_affected_assets_optimized(account_id, transactions_added, transactions_deleted, 
+                                    holdings_processor_func, monthly_processor_func=None, 
+                                    start_date=None, table_name="holdings"):
+    """
+    Common utility function to process only affected assets for both holdings and monthly holdings.
+    This eliminates code duplication and ensures consistent processing logic.
+    
+    Parameters:
+        account_id (str): The account ID to process
+        transactions_added (list): List of transaction IDs that were added
+        transactions_deleted (list): List of transaction IDs that were deleted
+        holdings_processor_func (function): Function to process holdings updates
+        monthly_processor_func (function, optional): Function to process monthly holdings updates
+        start_date (date, optional): Start date for monthly calculations
+        table_name (str): Table name for orphaned data removal (default: "holdings")
+    
+    Returns:
+        tuple: (affected_assets, processing_time_ms)
+    """
+    import time
+    from datetime import datetime
+    
+    start_time = time.time()
+    
+    log_message(f"Processing affected assets for account_id: {account_id}")
+    log_message(f"Transactions added: {transactions_added}, Transactions deleted: {transactions_deleted}")
+    
+    # Check if no transactions exist and remove all holdings if necessary
+    remove_all_holdings_for_account_if_no_transactions_exist(account_id)
+    
+    # Retrieve assets for added and deleted transactions
+    added_assets = get_assets_by_transaction_ids(transactions_added)
+    deleted_assets = get_assets_by_transaction_ids(transactions_deleted, True)
+    
+    log_message(f"Added assets: {added_assets}, Deleted assets: {deleted_assets}")
+    
+    # Remove orphaned records from holdings
+    remove_orphaned_data(account_id, deleted_assets, table_name)
+    
+    # Combine added and deleted assets to get all affected assets
+    affected_assets = list(set(added_assets + deleted_assets))
+    
+    if affected_assets:
+        log_message(f"Processing {len(affected_assets)} affected assets: {affected_assets}")
+        
+        # Process holdings updates using optimized function
+        if holdings_processor_func:
+            holdings_processor_func(account_id, affected_assets)
+
+        # Process monthly holdings updates if function provided
+        if monthly_processor_func and start_date:
+            log_message(f"Processing monthly holdings for {len(affected_assets)} affected assets")
+            monthly_processor_func(account_id, affected_assets, start_date)
+    else:
+        log_message("No affected assets to process")
+
+    processing_time_ms = int((time.time() - start_time) * 1000)
+    log_message(f"Processed {len(affected_assets)} affected assets in {processing_time_ms}ms")
+
+    return affected_assets, processing_time_ms
+
+def process_batch_transactions_optimized(message_payload, holdings_processor_func, 
+                                       monthly_processor_func=None, start_date=None):
+    """
+    Common utility function to process batch transactions efficiently.
+    Handles both single account and multiple account scenarios.
+    
+    Parameters:
+        message_payload (dict): The Kafka message payload
+        holdings_processor_func (function): Function to process holdings updates
+        monthly_processor_func (function, optional): Function to process monthly holdings updates
+        start_date (date, optional): Start date for monthly calculations
+    
+    Returns:
+        dict: Processing results with metadata
+    """
+    import time
+    from datetime import datetime
+    
+    start_time = time.time()
+    
+    # Handle different payload formats
+    if isinstance(message_payload, dict) and "accounts" in message_payload:
+        # Batch format with multiple accounts
+        accounts_data = message_payload["accounts"]
+        total_transactions = 0
+        all_affected_assets = []
+        
+        for account_data in accounts_data:
+            account_id = account_data.get("account_id")
+            transactions_added = account_data.get("transactions_added", [])
+            transactions_deleted = account_data.get("transactions_deleted", [])
+            
+            total_transactions += len(transactions_added)
+            
+            log_message(f"Processing account_id: {account_id} with {len(transactions_added)} added and {len(transactions_deleted)} deleted transactions")
+            
+            # Use the common processing function
+            affected_assets, _ = process_affected_assets_optimized(
+                account_id, transactions_added, transactions_deleted,
+                holdings_processor_func, monthly_processor_func, start_date
+            )
+            all_affected_assets.extend(affected_assets)
+        
+        processing_time_ms = int((time.time() - start_time) * 1000)
+        
+        return {
+            "accounts": [data.get("account_id") for data in accounts_data],
+            "assets": list(set(all_affected_assets)),  # Remove duplicates
+            "totalBatches": 1,
+            "totalTransactions": total_transactions,
+            "processingTimeMs": processing_time_ms,
+            "status": "complete"
+        }
+        
+    else:
+        # Single account format
+        account_id = message_payload.get("account_id")
+        transactions_added = message_payload.get("transactions_added", [])
+        transactions_deleted = message_payload.get("transactions_deleted", [])
+        
+        # Use the common processing function
+        affected_assets, processing_time_ms = process_affected_assets_optimized(
+            account_id, transactions_added, transactions_deleted,
+            holdings_processor_func, monthly_processor_func, start_date
+        )
+        
+        return {
+            "account_id": account_id,
+            "assets": affected_assets,
+            "totalBatches": 1,
+            "totalTransactions": len(transactions_added),
+            "processingTimeMs": processing_time_ms,
+            "status": "complete"
+        }
