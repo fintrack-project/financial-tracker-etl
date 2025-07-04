@@ -2,50 +2,28 @@ import time
 from datetime import datetime, timezone, timedelta
 from dateutil.relativedelta import relativedelta
 from etl.utils import get_db_connection, log_message
-from etl.utils.rate_limiter import rate_limiter, retry_strategy
 
 def fetch_data(asset, get_realtime_stock_data, get_realtime_crypto_data, get_realtime_forex_data):
     """
-    Fetch real-time data for a given asset with intelligent rate limiting.
+    Fetch real-time data for a given asset.
     """
     symbol = asset["symbol"]
     asset_type = asset["asset_type"]
-    priority = asset.get("priority", "normal")
 
     try:
-        # Apply intelligent rate limiting
-        wait_time = rate_limiter.wait_if_needed(priority)
-        if wait_time > 0:
-            log_message(f"Rate limited: waited {wait_time:.2f}s for {symbol} (priority: {priority})")
-        
         log_message(f"Fetching real-time data for symbol: {symbol}, asset_type: {asset_type}...")
-        
         if asset_type == "STOCK":
-            data = get_realtime_stock_data(symbol)
+            return get_realtime_stock_data(symbol)
         elif asset_type == "CRYPTO":
-            data = get_realtime_crypto_data(symbol)
+            return get_realtime_crypto_data(symbol)
         elif asset_type == "FOREX":
-            data = get_realtime_forex_data(*symbol.split("/"))
+            return get_realtime_forex_data(*symbol.split("/"))
         else:
             log_message(f"Unsupported asset type: {asset_type} for symbol: {symbol}. Skipping.")
             return None
 
-        # Record successful request
-        retry_strategy.record_success()
-        return data
-
     except Exception as e:
-        # Determine error type for adaptive retry
-        error_type = "unknown"
-        if "429" in str(e):
-            error_type = "rate_limit"
-        elif "timeout" in str(e).lower() or "timed out" in str(e).lower():
-            error_type = "timeout"
-        elif "500" in str(e) or "502" in str(e) or "503" in str(e):
-            error_type = "server_error"
-        
-        retry_strategy.record_error(error_type)
-        log_message(f"Error fetching data for symbol {symbol}: {e} (error_type: {error_type})")
+        log_message(f"Error fetching data for symbol {symbol}: {e}")
         raise
 
 
@@ -66,8 +44,8 @@ def process_data(data, required_fields):
 
 def fetch_and_insert_data(assets, required_fields, insert_or_update_data, get_realtime_stock_data, get_realtime_crypto_data, get_realtime_forex_data, max_retries=3, retry_delay=60):
     """
-    Fetch, process, and insert data for the given assets with intelligent rate limiting and adaptive retry.
-    Handles API rate limits by retrying failed requests with adaptive delays.
+    Fetch, process, and insert data for the given assets.
+    Handles API rate limits by retrying failed requests after a delay.
 
     Args:
         assets (list): List of assets to fetch data for.
@@ -77,9 +55,9 @@ def fetch_and_insert_data(assets, required_fields, insert_or_update_data, get_re
         get_realtime_crypto_data (function): Function to fetch crypto data.
         get_realtime_forex_data (function): Function to fetch forex data.
         max_retries (int): Maximum number of retries for failed requests.
-        retry_delay (int): Base delay in seconds (will be adjusted adaptively).
+        retry_delay (int): Delay in seconds before retrying after a rate limit error.
     """
-    log_message("Starting fetch_and_insert_data process with intelligent rate limiting...")
+    log_message("Starting fetch_and_insert_data process...")
     connection = get_db_connection()
     cursor = connection.cursor()
 
@@ -96,7 +74,7 @@ def fetch_and_insert_data(assets, required_fields, insert_or_update_data, get_re
                 asset_type = asset["asset_type"]
 
                 try:
-                    # Fetch data with rate limiting
+                    # Fetch data
                     data = fetch_data(asset, get_realtime_stock_data, get_realtime_crypto_data, get_realtime_forex_data)
                     if not data:
                         failed_assets.append(asset)
@@ -111,25 +89,18 @@ def fetch_and_insert_data(assets, required_fields, insert_or_update_data, get_re
                     successfully_fetched.append(asset)
 
                 except Exception as e:
-                    # Determine error type for adaptive retry
-                    error_type = "unknown"
                     if "429" in str(e):
-                        error_type = "rate_limit"
-                    elif "timeout" in str(e).lower() or "timed out" in str(e).lower():
-                        error_type = "timeout"
-                    elif "500" in str(e) or "502" in str(e) or "503" in str(e):
-                        error_type = "server_error"
-                    
-                    log_message(f"Error processing data for symbol {symbol}: {e} (error_type: {error_type})")
-                    failed_assets.append(asset)
+                        log_message(f"Rate limit exceeded for symbol {symbol}. Retrying in {retry_delay} seconds...")
+                        failed_assets.append(asset)
+                    else:
+                        log_message(f"Error processing data for symbol {symbol}: {e}")
+                        failed_assets.append(asset)
 
             remaining_assets = failed_assets
 
             if remaining_assets:
-                # Use adaptive retry delay
-                adaptive_delay = retry_strategy.get_retry_delay(retry_count + 1, error_type="rate_limit" if any("429" in str(e) for e in [Exception()]) else "unknown")
-                log_message(f"{len(remaining_assets)} assets failed. Retrying after {adaptive_delay:.2f}s (adaptive delay)...")
-                time.sleep(adaptive_delay)
+                log_message(f"{len(remaining_assets)} assets failed. Retrying after {retry_delay} seconds...")
+                time.sleep(retry_delay)
                 retry_count += 1
 
         if remaining_assets:

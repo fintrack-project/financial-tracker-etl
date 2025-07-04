@@ -10,7 +10,6 @@ from etl.fetch_utils import (
     fetch_and_insert_data,
     get_existing_data
 )
-from etl.utils.parallel_processor import parallel_processor, priority_queue
 from datetime import datetime, timezone
 from main import publish_kafka_messages, ProducerKafkaTopics
 
@@ -90,39 +89,23 @@ def run(message_payload):
 
     log_message(f"Assets needing updates: {assets_needing_update}")
 
-    # Enhanced batching logic with parallel processing
-    batch_size = 50  # Smaller batches for better rate limit management
+    # Batching logic
+    batch_size = 100
     all_results = []
     required_fields = ["symbol", "close", "percent_change", "change", "high", "low"]
     start_time = time.time()
-    
-    # Add priority information to assets
-    for asset in assets_needing_update:
-        priority = "high" if asset.get("priority") == "high" else "normal"
-        asset["priority"] = priority
-        priority_queue.add_asset(asset, priority)
-    
-    # Process assets using parallel processor with rate limiting
     for i in range(0, len(assets_needing_update), batch_size):
         batch = assets_needing_update[i:i+batch_size]
-        log_message(f"Processing batch {i//batch_size+1}/{(len(assets_needing_update) + batch_size - 1)//batch_size}")
-        
-        # Use parallel processor for better performance
-        batch_results = parallel_processor.process_assets_batched(
-            batch, 
-            lambda asset: fetch_and_insert_data(
-                [asset],  # Process single asset
-                required_fields,
-                insert_or_update_data,
-                get_realtime_stock_data,
-                get_realtime_crypto_data,
-                get_realtime_forex_data
-            ),
-            batch_size=min(batch_size, 10)  # Smaller sub-batches for rate limiting
+        fetch_and_insert_data(
+            batch,
+            required_fields,
+            insert_or_update_data,
+            get_realtime_stock_data,
+            get_realtime_crypto_data,
+            get_realtime_forex_data
         )
-        
         all_results.extend(batch)
-        log_message(f"Processed batch {i//batch_size+1} with {len(batch)} assets using parallel processing.")
+        log_message(f"Processed batch {i//batch_size+1} with {len(batch)} assets.")
 
     processing_time_ms = int((time.time() - start_time) * 1000)
     total_batches = (len(assets_needing_update) + batch_size - 1) // batch_size
