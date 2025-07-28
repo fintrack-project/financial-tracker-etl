@@ -13,7 +13,7 @@ All ETL jobs now implement batching logic to improve performance, scalability, a
 - **Purpose**: Fetch real-time market data for assets
 - **Batch Metadata**: 
   - `totalBatches`: Total number of batches processed
-  - `totalTransactions`: Total number of assets processed
+  - `totalAssets`: Total number of assets processed
   - `processingTimeMs`: Total processing time in milliseconds
   - `status`: "complete"
 
@@ -34,24 +34,6 @@ All ETL jobs now implement batching logic to improve performance, scalability, a
   - `totalAssets`: Total number of assets processed
   - `processingTimeMs`: Total processing time in milliseconds
   - `status`: "complete"
-
-### 4. process_transactions_to_holdings.py
-- **Batch Size**: 100 assets per batch
-- **Purpose**: Process transactions and update holdings
-- **Batch Metadata**:
-  - `totalBatches`: Total number of batches processed
-  - `totalTransactions`: Total number of transactions processed
-  - `processingTimeMs`: Total processing time in milliseconds
-  - `status`: "complete"
-
-### 5. process_transactions_to_holdings_monthly.py
-- **Batch Size**: 50 assets per batch (smaller due to complex calculations)
-- **Purpose**: Process transactions and update monthly holdings
-- **Batch Metadata**:
-  - `totalBatches`: Total number of batches processed
-  - `totalAssets`: Total number of assets processed
-  - `processingTimeMs`: Total processing time in milliseconds
-  - `status`: "transactions_processed"
 
 ## Benefits of Batching
 
@@ -87,11 +69,6 @@ All ETL jobs now implement batching logic to improve performance, scalability, a
 - More complex data processing
 - Higher risk of timeouts
 
-### Holdings Processing Jobs (50-100 per batch)
-- Variable batch sizes based on complexity
-- Database-intensive operations
-- Balance between performance and resource usage
-
 ## Kafka Message Structure
 
 All completion messages now include batch metadata:
@@ -118,52 +95,4 @@ All completion messages now include batch metadata:
 - Processing time per batch
 - Total processing time
 - Records processed per second
-- Error rates per batch
-
-## Future Enhancements
-
-### 1. **Dynamic Batch Sizing**
-- Adjust batch sizes based on system load
-- Adaptive batching based on API response times
-- Performance-based optimization
-
-### 2. **Parallel Processing**
-- Process multiple batches concurrently
-- Worker pool implementation
-- Load balancing across workers
-
-### 3. **Advanced Error Handling**
-- Retry mechanisms for failed batches
-- Circuit breaker patterns
-- Dead letter queues for failed records
-
-### 4. **Real-time Monitoring**
-- Live progress tracking
-- Performance dashboards
-- Alert systems for batch failures
-
-## Configuration
-
-Batch sizes can be configured by modifying the `batch_size` variable in each job:
-
-```python
-# Example configuration
-batch_size = 100  # Adjust based on job requirements
-```
-
-## Testing
-
-### Unit Tests
-- Test batch processing logic
-- Verify batch metadata generation
-- Test error handling scenarios
-
-### Integration Tests
-- Test end-to-end batch processing
-- Verify Kafka message structure
-- Test performance with large datasets
-
-### Load Tests
-- Test with maximum batch sizes
-- Verify system stability under load
-- Test concurrent job execution 
+- Error rates per batch 
