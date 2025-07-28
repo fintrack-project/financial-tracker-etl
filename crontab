@@ -1,2 +1,0 @@
-# ETL cron jobs for market data processing
-# Currently no scheduled jobs - all processing is triggered by Kafka messages 
