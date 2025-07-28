@@ -1,3 +1,2 @@
-# Run process_transactions_to_holdings_monthly job at 00:01 on the first day of each month
-# The job will be triggered by sending a message to the HOLDINGS_MONTHLY_REQUEST topic
-1 0 1 * * python3 -m etl.main produce HOLDINGS_MONTHLY_REQUEST '{"trigger": "monthly"}' >> /var/log/cron.log 2>&1 
+# ETL cron jobs for market data processing
+# Currently no scheduled jobs - all processing is triggered by Kafka messages 
