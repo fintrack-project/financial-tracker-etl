@@ -1,6 +1,6 @@
 # Financial Tracker ETL Pipeline
 
-The Financial Tracker ETL (Extract, Transform, Load) pipeline is a robust system designed to automate the ingestion, processing, and storage of financial data. This pipeline supports various financial data sources, processes transactions, and ensures the data is ready for analysis and reporting.
+The Financial Tracker ETL (Extract, Transform, Load) pipeline is a robust system designed to automate the ingestion, processing, and storage of financial data. This pipeline supports various financial data sources and ensures the data is ready for analysis and reporting.
 
 ## **Overview**
 
@@ -9,12 +9,10 @@ The ETL pipeline is a critical component of the Financial Tracker project, enabl
 1. **Data Extraction**:
    - Fetches live market data from APIs.
    - Retrieves historical data for financial assets.
-   - Processes user transactions for holdings and monthly summaries.
 
 2. **Data Transformation**:
    - Cleans and validates raw data.
    - Transforms data into a structured format for storage.
-   - Aggregates and calculates monthly holdings and balances.
 
 3. **Data Loading**:
    - Stores processed data into a PostgreSQL database.
@@ -29,13 +27,13 @@ The project includes several ETL jobs, each responsible for a specific part of t
   - Fetches historical market data for financial assets (e.g., stocks, forex, crypto).
   - Identifies missing data ranges and updates the database accordingly.
 
-- **`process_transactions_to_holdings`**:
-  - Processes user transactions to calculate current holdings.
-  - Updates the `holdings` table with the latest balances.
+- **`fetch_market_data`**:
+  - Fetches real-time market data for assets.
+  - Updates the `market_data` table with current prices and changes.
 
-- **`process_transactions_to_holdings_monthly`**:
-  - Aggregates transactions to calculate monthly holdings.
-  - Updates the `holdings_monthly` table for historical tracking.
+- **`fetch_market_index_data`**:
+  - Fetches market index data for symbols.
+  - Updates the `market_data` table with index information.
 
 - **`generate_mock_transactions`**:
   - Generates mock transaction data for testing purposes.
@@ -62,9 +60,11 @@ The pipeline interacts with the following key tables:
 
 - **`holdings`**:
   - Tracks the current balance of assets for each account.
+  - Updated synchronously by the backend when transactions are confirmed.
 
 - **`holdings_monthly`**:
   - Tracks monthly balances for assets, enabling historical analysis.
+  - Updated synchronously by the backend when transactions are confirmed.
 
 - **`asset`**:
   - Stores metadata about financial assets, such as symbols, units, and types.
@@ -91,19 +91,19 @@ To execute the ETL pipeline, follow these steps:
    pip install -r requirements.txt
 
 3. Configure environment variables:
+   - Set up database connection details (e.g., DB_HOST, DB_USER, DB_PASSWORD).
+   - Add API keys for financial data sources if required.
 
-- Set up database connection details<vscode_annotation details='%5B%7B%22title%22%3A%22hardcoded-credentials%22%2C%22description%22%3A%22Embedding%20credentials%20in%20source%20code%20risks%20unauthorized%20access%22%7D%5D'> (</vscode_annotation>e.g., DB_HOST, DB_USER, DB_PASSWORD).
-- Add API keys for financial data sources if required.
 4. Run individual ETL jobs:
 
 - Fetch historical market data:
 python etl/jobs/fetch_historical_market_data/fetch_historical_market_data.py
 
-- Process transactions to holdings:
-python etl/jobs/process_transactions_to_holdings/process_transactions_to_holdings.py
+- Fetch real-time market data:
+python etl/jobs/fetch_market_data/fetch_market_data.py
 
-- Process transactions to monthly holdings:
-python etl/jobs/process_transactions_to_holdings_monthly/process_transactions_to_holdings_monthly.py
+- Fetch market index data:
+python etl/jobs/fetch_market_index_data/fetch_market_index_data.py
 
 ### **3. Docker Deployment**
 The ETL pipeline can be containerized using Docker for consistent deployment across environments. Use the provided Dockerfile to build and run the pipeline:
@@ -117,13 +117,13 @@ financial-tracker-etl/
 ├── etl/
 │   ├── jobs/
 │   │   ├── fetch_historical_market_data/
-│   │   ├── process_transactions_to_holdings/
-│   │   ├── process_transactions_to_holdings_monthly/
+│   │   ├── fetch_market_data/
+│   │   ├── fetch_market_index_data/
 │   │   ├── generate_mock_transactions.py
 │   ├── utils/
 │   │   ├── db_utils.py
 │   │   ├── log_utils.py
-│   │   ├── process_transactions_utils.py
+│   │   ├── fetch_utils.py
 ├── Dockerfile
 ├── requirements.txt
 ├── README.md
