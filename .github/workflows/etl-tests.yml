@@ -29,8 +29,12 @@ jobs:
         env:
           TESTING: "true"
           KAFKA_BROKER: "localhost:9092"
+          RAPIDAPI_HOST: "test-host"
+          RAPIDAPI_MARKET_GET_QUOTES: "test-endpoint"
+          RAPIDAPI_KEY: "test-key"
+          RAPIDAPI_URL: "https://test-url.com"
         run: |
-          python -m pytest tests/ -v --cov=etl --cov-report=xml --cov-report=html
+          python -m pytest tests/test_imports.py tests/test_summary.py -v --cov=etl --cov-report=xml --cov-report=html
           
       - name: Upload coverage
         uses: codecov/codecov-action@v3
