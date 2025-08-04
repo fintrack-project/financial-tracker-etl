@@ -36,9 +36,13 @@ def get_db_connection(db_config=None):
 
 def log_message(message):
     """
-    Log a message to the ETL log file and stdout.
+    Log a message to both file and stdout.
     """
-    log_file = "/var/log/etl.log"
+    # Use local log file for tests, system log file for production
+    if os.environ.get('TESTING') or os.environ.get('CI'):
+        log_file = "etl_test.log"
+    else:
+        log_file = "/var/log/etl.log"
 
     # Configure logging to both file and stdout
     logging.basicConfig(
