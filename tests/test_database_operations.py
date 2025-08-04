@@ -335,7 +335,7 @@ class TestDatabaseOperations(unittest.TestCase):
         
         # Simulate multiple database operations
         for i in range(5):
-            validate_assets([{"symbol": f"SYMBOL{i}", "asset_type": "STOCK"}])
+            get_assets_needing_update([{"symbol": f"SYMBOL{i}", "asset_type": "STOCK"}])
         
         # Verify connection was reused (not created multiple times)
         # This depends on the actual implementation of connection pooling
