@@ -1,19 +1,21 @@
 import unittest
-from unittest.mock import patch, MagicMock, Mock
-from datetime import datetime, timezone, timedelta
-import psycopg
-from etl.utils import get_db_connection
+from unittest.mock import patch, MagicMock
+from datetime import datetime
+from etl.jobs.fetch_market_data.fetch_market_data import (
+    get_assets_needing_update,
+    insert_or_update_data,
+    run
+)
 from etl.fetch_utils import (
+    fetch_data,
+    process_data,
+    fetch_and_insert_data,
     get_existing_data,
     get_existing_data_ranges,
     adjust_date_range,
     determine_symbols_needing_update
 )
-from etl.jobs.fetch_market_data.fetch_market_data import (
-    insert_or_update_data,
-    validate_assets,
-    get_assets_needing_update
-)
+from tests.test_utils.mock_responses import get_mock_api_response
 
 
 class TestDatabaseOperations(unittest.TestCase):
@@ -86,57 +88,6 @@ class TestDatabaseOperations(unittest.TestCase):
         
         with self.assertRaises(psycopg.Error):
             insert_or_update_data(self.mock_cursor, self.mock_connection, self.mock_asset, self.mock_processed_data)
-
-    @patch('etl.jobs.fetch_market_data.fetch_market_data.get_db_connection')
-    def test_validate_assets_success(self, mock_get_db_connection):
-        """Test successful asset validation."""
-        mock_get_db_connection.return_value = self.mock_connection
-        self.mock_cursor.fetchall.return_value = [("AAPL",), ("TSLA",)]
-        
-        assets = [
-            {"symbol": "AAPL", "asset_type": "STOCK"},
-            {"symbol": "TSLA", "asset_type": "STOCK"},
-            {"symbol": "INVALID", "asset_type": "STOCK"}
-        ]
-        
-        valid_assets = validate_assets(assets)
-        
-        # Verify only valid assets are returned
-        expected_valid = [
-            {"symbol": "AAPL", "asset_type": "STOCK"},
-            {"symbol": "TSLA", "asset_type": "STOCK"}
-        ]
-        self.assertEqual(valid_assets, expected_valid)
-        
-        # Verify SQL query was executed
-        self.mock_cursor.execute.assert_called_once()
-
-    @patch('etl.jobs.fetch_market_data.fetch_market_data.get_db_connection')
-    def test_validate_assets_no_valid_assets(self, mock_get_db_connection):
-        """Test asset validation when no assets are valid."""
-        mock_get_db_connection.return_value = self.mock_connection
-        self.mock_cursor.fetchall.return_value = []
-        
-        assets = [
-            {"symbol": "INVALID1", "asset_type": "STOCK"},
-            {"symbol": "INVALID2", "asset_type": "STOCK"}
-        ]
-        
-        valid_assets = validate_assets(assets)
-        
-        # Verify empty list is returned
-        self.assertEqual(valid_assets, [])
-
-    @patch('etl.jobs.fetch_market_data.fetch_market_data.get_db_connection')
-    def test_validate_assets_database_error(self, mock_get_db_connection):
-        """Test handling of database errors during asset validation."""
-        mock_get_db_connection.return_value = self.mock_connection
-        self.mock_cursor.execute.side_effect = psycopg.Error("Database error")
-        
-        assets = [{"symbol": "AAPL", "asset_type": "STOCK"}]
-        
-        with self.assertRaises(psycopg.Error):
-            validate_assets(assets)
 
     @patch('etl.jobs.fetch_market_data.fetch_market_data.get_db_connection')
     @patch('etl.jobs.fetch_market_data.fetch_market_data.get_closest_us_market_closing_time')
@@ -384,7 +335,7 @@ class TestDatabaseOperations(unittest.TestCase):
         
         # Simulate multiple database operations
         for i in range(5):
-            validate_assets([{"symbol": f"SYMBOL{i}", "asset_type": "STOCK"}])
+            get_assets_needing_update([{"symbol": f"SYMBOL{i}", "asset_type": "STOCK"}])
         
         # Verify connection was reused (not created multiple times)
         # This depends on the actual implementation of connection pooling

@@ -11,7 +11,7 @@ from etl.fetch_utils import (
     get_existing_data
 )
 from datetime import datetime, timezone
-from main import publish_kafka_messages, ProducerKafkaTopics
+from etl.main import publish_kafka_messages, ProducerKafkaTopics
 
 def get_assets_needing_update(assets):
     """
