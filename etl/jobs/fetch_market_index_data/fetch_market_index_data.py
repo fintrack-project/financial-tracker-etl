@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import time
 from etl.utils import get_db_connection, log_message, load_env_variables, quote_market_index_data
 from etl.fetch_utils import get_existing_data
-from main import publish_kafka_messages, ProducerKafkaTopics
+from etl.main import publish_kafka_messages, ProducerKafkaTopics
 
 # Load environment variables from .env file
 env_vars = load_env_variables()
