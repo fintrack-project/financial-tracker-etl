@@ -224,7 +224,6 @@ def publish_kafka_messages(topic, params=None):
         'retries': 3,
         'retry.backoff.ms': 1000,
         'request.timeout.ms': 30000,
-        'max.block.ms': 60000,
         'enable.idempotence': True,
         'compression.type': 'snappy',
         'linger.ms': 5,
